@@ -105,7 +105,7 @@ void OMW::Engine::frame(float frametime)
         mEnvironment.getStateManager()->update (frametime);
 
         bool guiActive = mEnvironment.getWindowManager()->isGuiMode();
-
+        guiActive = false;
         osg::Timer_t beforeScriptTick = osg::Timer::instance()->tick();
         if (mEnvironment.getStateManager()->getState()==
             MWBase::StateManager::State_Running)
