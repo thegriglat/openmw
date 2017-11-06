@@ -100,7 +100,7 @@ void OMW::Engine::frame(float frametime)
 
         // Main menu opened? Then scripts are also paused.
         bool paused = mEnvironment.getWindowManager()->containsMode(MWGui::GM_MainMenu);
-
+        paused = false;
         // update game state
         mEnvironment.getStateManager()->update (frametime);
 
@@ -687,6 +687,7 @@ void OMW::Engine::go()
         dt = std::min(dt, 0.2);
 
         bool guiActive = mEnvironment.getWindowManager()->isGuiMode();
+        guiActive = false;
         if (!guiActive)
             simulationTime += dt;
 
