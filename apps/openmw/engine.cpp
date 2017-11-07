@@ -100,12 +100,10 @@ void OMW::Engine::frame(float frametime)
 
         // Main menu opened? Then scripts are also paused.
         bool paused = mEnvironment.getWindowManager()->containsMode(MWGui::GM_MainMenu);
-        paused = false;
         // update game state
         mEnvironment.getStateManager()->update (frametime);
 
-        bool guiActive = mEnvironment.getWindowManager()->isGuiMode();
-        guiActive = false;
+        //paused = mEnvironment.getWindowManager()->isGuiMode();
         osg::Timer_t beforeScriptTick = osg::Timer::instance()->tick();
         if (mEnvironment.getStateManager()->getState()==
             MWBase::StateManager::State_Running)
@@ -124,7 +122,7 @@ void OMW::Engine::frame(float frametime)
                 mEnvironment.getWorld()->markCellAsUnchanged();
             }
 
-            if (!guiActive)
+            if (!paused)
             {
                 double hours = (frametime * mEnvironment.getWorld()->getTimeScaleFactor()) / 3600.0;
                 mEnvironment.getWorld()->advanceTime(hours, true);
@@ -138,7 +136,7 @@ void OMW::Engine::frame(float frametime)
             MWBase::StateManager::State_NoGame)
         {
             mEnvironment.getMechanicsManager()->update(frametime,
-                guiActive);
+                paused);
         }
         osg::Timer_t afterMechanicsTick = osg::Timer::instance()->tick();
 
@@ -146,7 +144,7 @@ void OMW::Engine::frame(float frametime)
             MWBase::StateManager::State_Running)
         {
             MWWorld::Ptr player = mEnvironment.getWorld()->getPlayerPtr();
-            if(!guiActive && player.getClass().getCreatureStats(player).isDead())
+            if(!paused && player.getClass().getCreatureStats(player).isDead())
                 mEnvironment.getStateManager()->endGame();
         }
 
@@ -155,7 +153,7 @@ void OMW::Engine::frame(float frametime)
         if (mEnvironment.getStateManager()->getState()!=
             MWBase::StateManager::State_NoGame)
         {
-            mEnvironment.getWorld()->update(frametime, guiActive);
+            mEnvironment.getWorld()->update(frametime, paused);
         }
         osg::Timer_t afterPhysicsTick = osg::Timer::instance()->tick();
 
@@ -686,9 +684,9 @@ void OMW::Engine::go()
         frameTimer.setStartTick();
         dt = std::min(dt, 0.2);
 
-        bool guiActive = mEnvironment.getWindowManager()->isGuiMode();
-        guiActive = false;
-        if (!guiActive)
+        bool paused = mEnvironment.getWindowManager()->isGuiMode();
+        paused = false;
+        if (!paused)
             simulationTime += dt;
 
         mViewer->advance(simulationTime);
