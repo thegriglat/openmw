@@ -495,7 +495,7 @@ namespace MWRender
         reportStats();
 
         mUnrefQueue->flush(mWorkQueue.get());
-        paused = false;
+
         if (!paused)
         {
             mEffectManager->update(dt);
