@@ -760,7 +760,7 @@ private:
 
             if (visibleRatio > 0.f)
             {
-                const float fadeThreshold = 0.1;
+                const float fadeThreshold = 1.;
                 if (visibleRatio < fadeThreshold)
                 {
                     float fade = 1.f - (fadeThreshold - visibleRatio) / fadeThreshold;
