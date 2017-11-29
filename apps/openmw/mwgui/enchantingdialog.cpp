@@ -366,7 +366,9 @@ namespace MWGui
         else
         {
             MWBase::Environment::get().getWindowManager()->playSound("enchant fail");
-            MWBase::Environment::get().getWindowManager()->messageBox ("#{sNotifyMessage34}");
+            // don't show fail message for Azura star
+            if (!Misc::StringUtils::ciEqual(mEnchanting.getGem().get<ESM::Miscellaneous>()->mBase->mId, "Misc_SoulGem_Azura"))
+                MWBase::Environment::get().getWindowManager()->messageBox ("#{sNotifyMessage34}");
         }
 
         MWBase::Environment::get().getWindowManager()->removeGuiMode (GM_Enchanting);
