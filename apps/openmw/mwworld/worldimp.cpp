@@ -2446,6 +2446,10 @@ namespace MWWorld
             if (ptr.getRefData().isDeleted())
                 return true;
 
+            // vanilla Morrowind does not allow to sell items from containers with zero capacity
+            if (ptr.getClass().getCapacity(ptr) <= 0.f)
+                return true;
+
             if (Misc::StringUtils::ciEqual(ptr.getCellRef().getOwner(), mOwner.getCellRef().getRefId()))
                 mOut.push_back(ptr);
 
