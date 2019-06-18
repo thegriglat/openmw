@@ -3,7 +3,7 @@ A Tour through OpenMW CS: making a magic ring
 
 In this first chapter we will create a mod that adds a new ring with a simple
 enchantment to the game. The ring will give its wearer a permanent Night Vision
-effect while being worn. You do not need previous Morrowind modding experience, 
+effect while being worn. You do not need previous Morrowind modding experience,
 but you should be familiar with the game itself. There will be no
 scripting necessary, we can achieve everything using just what the base game
 offers out of the box. Before continuing make sure that OpenMW is properly
@@ -24,7 +24,7 @@ We will start by launching OpenMW CS, the location of the program depends on
 your operating system. You will be presented with a dialogue with three
 options: create a new game, create a new addon, edit a content file.
 
-.. figure:: _static/images/chapter-1/opening-dialogue.png
+.. figure:: https://gitlab.com/OpenMW/openmw-docs/raw/master/docs/source/manuals/openmw-cs/_static/images/chapter-1/opening-dialogue.png
    :alt: Opening dialogue with three option and setting button (the wrench)
 
 The first option is for creating an entirely new game, that's not what we want.
@@ -37,7 +37,7 @@ optionally a number of other addons we want to depend on. The name of the
 project is arbitrary, it will be used to identify the addon later in the OpenMW
 launcher.
 
-.. figure:: _static/images/chapter-1/new-project.png
+.. figure:: https://gitlab.com/OpenMW/openmw-docs/raw/master/docs/source/manuals/openmw-cs/_static/images/chapter-1/new-project.png
    :alt: Creation dialogue for a new project, pick content modules and name
 
 Choose Morrowind as your content file and enter `Ring of Night Vision` as the
@@ -47,7 +47,7 @@ to, but for this mod the base game is enough.
 Once the addon has been created you will be presented with a table. If you see
 a blank window rather than a table choose *World* → *Objects* from the menu.
 
-.. figure:: _static/images/chapter-1/objects.png
+.. figure:: https://gitlab.com/OpenMW/openmw-docs/raw/master/docs/source/manuals/openmw-cs/_static/images/chapter-1/new-project.png
    :alt: The table showing all object records in the game.
 
 Let's talk about the interface for a second. Every window in OpenMW CS has
@@ -83,7 +83,7 @@ We need to enter an *ID* (short for *identifier*) and pick the type. The
 identifier is a unique name by which the ring can later be identified; I have
 chosen `ring_night_vision`. For the type choose *Clothing*.
 
-.. figure:: _static/images/chapter-1/add-record.png
+.. figure:: https://gitlab.com/OpenMW/openmw-docs/raw/master/docs/source/manuals/openmw-cs/_static/images/chapter-1/add-record.png
    :alt: Enter the ID and type of the new ring
 
 The table should jump right to our newly created record, if not read further
@@ -101,7 +101,7 @@ instead of using the context menu; the default is double-clicking while
 holding down the shift key.
 
 
-.. figure:: _static/images/chapter-1/edit-record.png
+.. figure:: https://gitlab.com/OpenMW/openmw-docs/raw/master/docs/source/manuals/openmw-cs/_static/images/chapter-1/edit-record.png
    :alt: Edit the properties of the record in a separate panel
 
 You can set the name, weight and coin value as you like, I chose `Ring of Night
@@ -133,7 +133,7 @@ the filter directly into the filter field rather than the name of an existing
 filter. To signify that we are using an instant filter the have to use `!` as
 the first character. Type the following into the field:
 
-.. code:: 
+.. code::
 
    !string("id", ".*ring.*")
 
@@ -211,41 +211,37 @@ Adding the ring to the game's world
 
 Now that we have defined the ring it is time add it to the game world so the
 player can find it legitimately. We will add the ring to a merchant, place it
-in a chest and put it somewhere in plain sight. To this end we will have to
+in a chest, and put it somewhere in plain sight. To this end we will have to
 actually modify the contents of the game.
 
+Adding to an NPC
+================
 
-Subsection to come...
-=====================
-
-Adding to an npc
-****************
-
-The simplest way is probably to add it to the inventory of a shopkeeper. 
+The simplest way is probably to add it to the inventory of a shopkeeper.
 An obvious candidate is Arrille in Seyda Neen - he's quick to find in a new game
 and he's easy to find in the CS as his name comes early alphabetically.
 
-.. figure:: _static/images/chapter-1/Ring_to_Arrille.png
+.. figure:: https://gitlab.com/OpenMW/openmw-docs/raw/master/docs/source/manuals/openmw-cs/_static/images/chapter-1/Ring_to_Arrille.png
    :alt: Putting the ring into Arrille's inventory
-   
-Open the CS and open the *Objects* table (*World* → *Objects*). 
+
+Open the CS and open the *Objects* table (*World* → *Objects*).
 Scroll down to Arrille, or use a filter like !string("ID","arrille").
 
-Open another pane to edit him - either right click and select edit or use the 
+Open another pane to edit him - either right click and select edit or use the
 shortcut (default is shift double-click). Scroll down to the inventory section
-and right click to add a new row. Type in the id of the ring (or find it in the 
-object pane, and drag and drop). Set the number of rings for him to stock - with 
+and right click to add a new row. Type in the id of the ring (or find it in the
+object pane, and drag and drop). Set the number of rings for him to stock - with
 a negative number indicating that he will restock again to maintain that level.
 
 However, it's an attractive item, so he will probably wear it rather than sell it.
 So set his stock level too high for him to wear them all (3 works, 2 might do).
 
-Another possibilty, again in Seyda Neen making it easy to access, would be for
+Another possibility, again in Seyda Neen making it easy to access, would be for
 Fargoth to give it to the player in exchange for his healing ring.
 
-.. figure:: _static/images/chapter-1/Ring_to_Fargoth_1.png
+.. figure:: https://gitlab.com/OpenMW/openmw-docs/raw/master/docs/source/manuals/openmw-cs/_static/images/chapter-1/Ring_to_Fargoth_1.png
    :alt: Editing Fargoth to give ring to player
-   
+
 Open the *Topicinfo* Table (*Characters* → *Topic Infos*). Use a filter !string(Topic,ring)
 and select the row with a response starting with "You found it!". Edit the record,
 firstly by adding a bit more to the response, then by adding a line to the script
@@ -255,8 +251,81 @@ to give the ring to the player - the same as used earlier in the console
 
    player->AddItem "ring_night_vision" 1
 
-.. figure:: _static/images/chapter-1/Ring_to_Fargoth_2.png
+.. figure:: https://gitlab.com/OpenMW/openmw-docs/raw/master/docs/source/manuals/openmw-cs/_static/images/chapter-1/Ring_to_Fargoth_2.png
    :alt: Editing Fargoth to give ring to player
+
+Placing in a chest
+==================
+
+For this example we will use the small chest intended for lockpick practice,
+located in the Census and Excise Office in Seyda Neen.
+
+First we need the ID of the chest - this can be obtained either by clicking on it in the console
+in the game, or by applying a similar process in the CS -
+
+World/Cells
+
+Select "Seyda Neen, Census and Excise Office"
+
+Right-click and select "View"
+
+Use mouse wheel to zoom in/out, and mouse plus WASD keys to navigate
+
+Click on the small chest
+
+Either way, you should find the ID, which is "chest_small_02_lockprac".
+
+Open the Objects table (World/Objects) and scroll down to find this item.
+
+Alternatively use the Edit/Search facility, selecting ID rather than text,
+enter "lockprac" (without the quotes) into the search box, press "Search",
+which should return two rows, then select the "Container" one rather than the "Instance"
+
+Right-click and "Edit Record".
+
+Right-click the "Content" section and select "Add a row"
+
+Set the Item ID of the new row to be your new ring - simplest way is probably to open the Objects
+table if it's not already open, sort on the "Modified" column which should bring the ring,
+with its status of "Added" to the top, then drag and drop to the chest row.
+
+Increase the Count to 1.
+
+Save the addon, then test to ensure it works - e.g. start a new game and lockpick the chest.
+
+Placing in plain sight
+======================
+
+Let's hide the Ring of Night vision in the cabin of the [Ancient Shipwreck]
+(https://en.uesp.net/wiki/Morrowind:Ancient_Shipwreck), a derelict vessel
+southeast of Dagon Fel. Open the list of Cells (*World* → *Cells*) and find
+"Ancient Shipwreck, Cabin".
+
+This will open a visualization of the cabin. You can navigate around the scene
+just like you would when playing Morrowind. Use the WASD keys to move forward,
+backwards, and sideways. Click and drag with the left mouse button to change the
+direction you are looking. Navigate to the table in the cabin.
+
+If you've closed the Objects table, reopen it via *World* → *Objects*. Navigate
+to your Ring of Night Vision (you can find it easily if you sort by the "Modified"
+column). Drag the ring from the Objects table onto the table in the Cell view.
+
+Now let's move the ring to the precise location we want. Hover over the ring and
+click the middle mouse button. If you don't have a middle mouse button, you can
+select an alternative command by going to *Edit* → *Preferences…* (Windows, Linux)
+or *OpenMW* → *Preferences…* (macOS). Go to the Key Bindings section and choose
+"Scene" from the dropdown menu. Then click on the button for "Primary Select" and
+choose an alternative binding.
+
+After you have switched to movement mode, you will see several arrows. Clicking
+and dragging them with the right mouse button will allow you to move the object
+in the direction you want.
+
+If you'd like an easy way to test this, you can start OpenMW with the [game
+arguments](https://wiki.openmw.org/index.php?title=Testing)
+`--start="Ancient Shipwreck, Cabin" --skip-menu`. This will place you right in
+the cell and allow you to pick up and equip the ring in order to check that it
+works.
 
 Navigation in the CS
 ====================
@@ -264,8 +333,8 @@ This is probably a suitable place to start talking about how navigation differs 
 in vanilla Morrowind.
 
 There is advice in Scripting for Dummies, the definitive manual for Morrowind Scripting:
-"If you give your scripts a common tag, that will make it easier to jump between the 
-different scripts of your project, e.g. start every script name with AA_Scriptname 
+"If you give your scripts a common tag, that will make it easier to jump between the
+different scripts of your project, e.g. start every script name with AA_Scriptname
 this will put them right at the beginning of the list and keep them neatly together."
 
 This is valid for the rather poorer navigation facilities there, but it's not sensible for
@@ -290,12 +359,12 @@ the base game.
 
 "Modified" status will cover items from the base game which have been modified in this addon.
 
-Click on the top of the column to toggle between ascending and descending order - thus between "Added" 
-and "Modified" at the top. Or put your desired modified status into a filter then sort alpabetically 
+Click on the top of the column to toggle between ascending and descending order - thus between "Added"
+and "Modified" at the top. Or put your desired modified status into a filter then sort alphabetically
 on a different column.
 
 
-   
+
 Checking your new addon
 =======================
 
@@ -304,42 +373,3 @@ already checked. Load a game and make your way to Seyda Neen - or start a new ga
 
 Check whether Arrille has one (or more) for sale, and whether Fargoth give you one
 when you return his healing ring.
-
-Placing in a chest
-******************
-
-For this example we will use the small chest intended for lockpick practice, 
-located in the Census and Excise Office in Seyda Neen.
-
-First we need the ID of the chest - this can be obtained either by clicking on it in the console
-in the game, or by applying a similar process in the CS - 
-
-World/Cells
-
-Select "Seyda Neen, Census and Excise Office"
-
-Right-click and select "View"
-
-Use mouse wheel to zoom in/out, and mouse plus WASD keys to navigate
-
-Click on the small chest
-
-Either way, you should find the ID, which is "chest_small_02_lockprac".
-
-Open the Objects table (World/Objects) and scroll down to find this item.
-
-Alternatively use the Edit/Search facility, selecting ID rather than text, 
-enter "lockprac" (without the quotes) into the search box, press "Search",
-which should return two rows, then select the "Container" one rather than the "Instance"
-
-Right-click and "Edit Record".
-
-Right-click the "Content" section and select "Add a row"
-
-Set the Item ID of the new row to be your new ring - simplest way is probably to open the Objects
-table if it's not already open, sort on the "Modified" column which should bring the ring,
-with its status of "Added" to the top, then drag and drop to the chest row. 
-
-Increase the Count to 1.
-
-Save the addon, then test to ensure it works - e.g. start a new game and lockpick the chest.

@@ -2,7 +2,6 @@
 #define AISTATE_H
 
 #include <typeinfo>
-#include <stdexcept>
 
 namespace MWMechanics
 {
@@ -59,7 +58,7 @@ namespace MWMechanics
         
         bool empty() const
         {
-            return mStorage == NULL;
+            return mStorage == nullptr;
         }
         
         const std::type_info& getType() const
@@ -67,16 +66,12 @@ namespace MWMechanics
             return typeid(mStorage);
         }
         
-        
-        DerivedClassStorage():mStorage(NULL){}
+        DerivedClassStorage():mStorage(nullptr){}
         ~DerivedClassStorage()
         {
             if(mStorage)
                 delete mStorage;
         }
-        
-        
-        
     };
 
 

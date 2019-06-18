@@ -131,14 +131,15 @@ namespace MWGui
     typedef std::vector<Faction> FactionList;
 
     WindowManager(osgViewer::Viewer* viewer, osg::Group* guiRoot, Resource::ResourceSystem* resourceSystem, SceneUtil::WorkQueue* workQueue,
-                  const std::string& logpath, const std::string& cacheDir, bool consoleOnlyScripts,
-                  Translation::Storage& translationDataStorage, ToUTF8::FromType encoding, bool exportFonts, const std::map<std::string,std::string>& fallbackMap, const std::string& versionDescription);
+                  const std::string& logpath, const std::string& cacheDir, bool consoleOnlyScripts, Translation::Storage& translationDataStorage,
+                  ToUTF8::FromType encoding, bool exportFonts, const std::string& versionDescription, const std::string& localPath);
     virtual ~WindowManager();
 
     /// Set the ESMStore to use for retrieving of GUI-related strings.
     void setStore (const MWWorld::ESMStore& store);
 
     void initUI();
+    virtual void loadUserFonts();
 
     virtual Loading::Listener* getLoadingScreen();
 
@@ -185,7 +186,7 @@ namespace MWGui
     virtual MWGui::TradeWindow* getTradeWindow();
 
     /// Make the player use an item, while updating GUI state accordingly
-    virtual void useItem(const MWWorld::Ptr& item);
+    virtual void useItem(const MWWorld::Ptr& item, bool bypassBeastRestrictions=false);
 
     virtual void updateSpellWindow();
 
@@ -246,6 +247,7 @@ namespace MWGui
     virtual const MWWorld::Ptr& getSelectedEnchantItem() const;
     virtual void setSelectedWeapon(const MWWorld::Ptr& item);
     virtual const MWWorld::Ptr& getSelectedWeapon() const;
+    virtual int getFontHeight() const;
     virtual void unsetSelectedSpell();
     virtual void unsetSelectedWeapon();
 
@@ -314,6 +316,8 @@ namespace MWGui
 
     virtual void setEnemy (const MWWorld::Ptr& enemy);
 
+    virtual int getMessagesCount() const;
+
     virtual const Translation::Storage& getTranslationDataStorage() const;
 
     void onSoulgemDialogButtonPressed (int button);
@@ -346,6 +350,7 @@ namespace MWGui
     virtual void removeCurrentModal(WindowModal* input);
 
     virtual void pinWindow (MWGui::GuiWindow window);
+    virtual void toggleMaximized(Layout *layout);
 
     /// Fade the screen in, over \a time seconds
     virtual void fadeScreenIn(const float time, bool clearQueue, float delay);
@@ -359,6 +364,7 @@ namespace MWGui
     virtual void activateHitOverlay(bool interrupt);
     virtual void setWerewolfOverlay(bool set);
 
+    virtual void toggleConsole();
     virtual void toggleDebugWindow();
 
     /// Cycle to next or previous spell
@@ -374,12 +380,14 @@ namespace MWGui
     virtual std::string correctTexturePath(const std::string& path);
     virtual bool textureExists(const std::string& path);
 
+    void addCell(MWWorld::CellStore* cell);
     void removeCell(MWWorld::CellStore* cell);
     void writeFog(MWWorld::CellStore* cell);
 
     virtual const MWGui::TextColours& getTextColours();
 
-    virtual bool injectKeyPress(MyGUI::KeyCode key, unsigned int text);
+    virtual bool injectKeyPress(MyGUI::KeyCode key, unsigned int text, bool repeat=false);
+    virtual bool injectKeyRelease(MyGUI::KeyCode key);
 
   private:
     const MWWorld::ESMStore* mStore;
@@ -400,6 +408,8 @@ namespace MWGui
     std::string mSelectedSpell;
     MWWorld::Ptr mSelectedEnchantItem;
     MWWorld::Ptr mSelectedWeapon;
+
+    void loadFontDelegate(MyGUI::xml::ElementPtr _node, const std::string& _file, MyGUI::Version _version);
 
     std::vector<WindowModal*> mCurrentModals;
 
@@ -507,11 +517,11 @@ namespace MWGui
 
     void updateMap();
 
-    std::map<std::string, std::string> mFallbackMap;
-    
     int mShowOwned;
 
     ToUTF8::FromType mEncoding;
+
+    int mFontHeight;
 
     std::string mVersionDescription;
 

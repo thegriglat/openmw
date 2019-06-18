@@ -90,7 +90,9 @@ namespace MWBase
             virtual void setPlayerClass (const ESM::Class& class_) = 0;
             ///< Set player class to custom class.
 
-            virtual void rest(bool sleep) = 0;
+            virtual void restoreDynamicStats(MWWorld::Ptr actor, double hours, bool sleep) = 0;
+
+            virtual void rest(double hours, bool sleep) = 0;
             ///< If the player is sleeping or waiting, this should be called every hour.
             /// @param sleep is the player sleeping or waiting?
 
@@ -225,8 +227,18 @@ namespace MWBase
             /// Resurrects the player if necessary
             virtual void keepPlayerAlive() = 0;
 
+            virtual bool isCastingSpell (const MWWorld::Ptr& ptr) const = 0;
             virtual bool isReadyToBlock (const MWWorld::Ptr& ptr) const = 0;
             virtual bool isAttackingOrSpell(const MWWorld::Ptr &ptr) const = 0;
+
+            virtual void castSpell(const MWWorld::Ptr& ptr, const std::string spellId, bool manualSpell) = 0;
+
+            virtual void processChangedSettings (const std::set< std::pair<std::string, std::string> >& settings) = 0;
+
+            virtual float getActorsProcessingRange() const = 0;
+
+            virtual bool onOpen(const MWWorld::Ptr& ptr) = 0;
+            virtual void onClose(const MWWorld::Ptr& ptr) = 0;
 
             /// Check if the target actor was detected by an observer
             /// If the observer is a non-NPC, check all actors in AI processing distance as observers
@@ -239,7 +251,7 @@ namespace MWBase
             virtual std::vector<std::pair<std::string, int> > getStolenItemOwners(const std::string& itemid) = 0;
 
             /// Has the player stolen this item from the given owner?
-            virtual bool isItemStolenFrom(const std::string& itemid, const std::string& ownerid) = 0;
+            virtual bool isItemStolenFrom(const std::string& itemid, const MWWorld::Ptr& ptr) = 0;
 
             virtual bool isBoundItem(const MWWorld::Ptr& item) = 0;
             virtual bool isAllowedToUse (const MWWorld::Ptr& ptr, const MWWorld::Ptr& target, MWWorld::Ptr& victim) = 0;
@@ -254,7 +266,7 @@ namespace MWBase
             virtual void cleanupSummonedCreature(const MWWorld::Ptr& caster, int creatureActorId) = 0;
 
             virtual void confiscateStolenItemToOwner(const MWWorld::Ptr &player, const MWWorld::Ptr &item, const MWWorld::Ptr& victim, int count) = 0;
-            virtual bool isAttackPrepairing(const MWWorld::Ptr& ptr) = 0;
+            virtual bool isAttackPreparing(const MWWorld::Ptr& ptr) = 0;
             virtual bool isRunning(const MWWorld::Ptr& ptr) = 0;
             virtual bool isSneaking(const MWWorld::Ptr& ptr) = 0;
     };

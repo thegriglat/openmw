@@ -1,6 +1,8 @@
 #ifndef OPENMW_MWGUI_VIDEOWIDGET_H
 #define OPENMW_MWGUI_VIDEOWIDGET_H
 
+#include <memory>
+
 #include <MyGUI_Widget.h>
 
 namespace Video
@@ -25,6 +27,8 @@ namespace MWGui
         MYGUI_RTTI_DERIVED(VideoWidget)
 
         VideoWidget();
+        
+        ~VideoWidget();
 
         /// Set the VFS (virtual file system) to find the videos on.
         void setVFS(const VFS::Manager* vfs);

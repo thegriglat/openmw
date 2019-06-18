@@ -110,7 +110,11 @@ void CSVWorld::EnumDelegate::paint (QPainter *painter, const QStyleOptionViewIte
     int valueIndex = getValueIndex(index);
     if (valueIndex != -1)
     {
+#if QT_VERSION >= QT_VERSION_CHECK(5,7,0)
+        QStyleOptionViewItem itemOption(option);
+#else
         QStyleOptionViewItemV4 itemOption(option);
+#endif
         itemOption.text = mValues.at(valueIndex).second;
         QApplication::style()->drawControl(QStyle::CE_ItemViewItem, &itemOption, painter);
     }
@@ -151,7 +155,7 @@ CSVWorld::EnumDelegateFactory::EnumDelegateFactory (const char **names, bool all
         add (i, names[i]);
 }
 
-CSVWorld::EnumDelegateFactory::EnumDelegateFactory (const std::vector<std::string>& names,
+CSVWorld::EnumDelegateFactory::EnumDelegateFactory (const std::vector<std::pair<int,std::string>>& names,
     bool allowNone)
 {
     if (allowNone)
@@ -160,7 +164,7 @@ CSVWorld::EnumDelegateFactory::EnumDelegateFactory (const std::vector<std::strin
     int size = static_cast<int> (names.size());
 
     for (int i=0; i<size; ++i)
-        add (i, names[i].c_str());
+        add (names[i].first, names[i].second.c_str());
 }
 
 CSVWorld::CommandDelegate *CSVWorld::EnumDelegateFactory::makeDelegate (
@@ -171,5 +175,16 @@ CSVWorld::CommandDelegate *CSVWorld::EnumDelegateFactory::makeDelegate (
 
 void CSVWorld::EnumDelegateFactory::add (int value, const QString& name)
 {
-    mValues.push_back (std::make_pair (value, name));
+    auto pair = std::make_pair (value, name);
+
+    for (auto it=mValues.begin(); it!=mValues.end(); ++it)
+    {
+        if (it->second > name)
+        {
+            mValues.insert(it, pair);
+            return;
+        }
+    }
+
+    mValues.push_back(std::make_pair (value, name));
 }

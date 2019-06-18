@@ -7,6 +7,7 @@
 #include <osg/ref_ptr>
 #include <osg/Vec3f>
 #include <osg/Uniform>
+#include <osg/Camera>
 
 #include <components/settings/settings.hpp>
 
@@ -49,8 +50,6 @@ namespace MWRender
     /// Water rendering
     class Water
     {
-        static const int CELL_SIZE = 8192;
-
         osg::ref_ptr<osg::Uniform> mRainIntensityUniform;
 
         osg::ref_ptr<osg::Group> mParent;
@@ -58,7 +57,6 @@ namespace MWRender
         osg::ref_ptr<osg::PositionAttitudeTransform> mWaterNode;
         osg::ref_ptr<osg::Geometry> mWaterGeom;
         Resource::ResourceSystem* mResourceSystem;
-        const Fallback::Map* mFallback;
         osg::ref_ptr<osgUtil::IncrementalCompileOperation> mIncrementalCompileOperation;
 
         std::unique_ptr<RippleSimulation> mSimulation;
@@ -71,6 +69,7 @@ namespace MWRender
         bool mEnabled;
         bool mToggled;
         float mTop;
+        bool mInterior;
 
         osg::Vec3f getSceneNodeCoordinates(int gridX, int gridY);
         void updateVisible();
@@ -85,7 +84,7 @@ namespace MWRender
 
     public:
         Water(osg::Group* parent, osg::Group* sceneRoot,
-              Resource::ResourceSystem* resourceSystem, osgUtil::IncrementalCompileOperation* ico, const Fallback::Map* fallback,
+              Resource::ResourceSystem* resourceSystem, osgUtil::IncrementalCompileOperation* ico,
               const std::string& resourcePath);
         ~Water();
 
@@ -111,6 +110,9 @@ namespace MWRender
         void setHeight(const float height);
 
         void update(float dt);
+
+        osg::Camera *getReflectionCamera();
+        osg::Camera *getRefractionCamera();
 
         void processChangedSettings(const Settings::CategorySettingVector& settings);
 

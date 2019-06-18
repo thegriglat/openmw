@@ -1,6 +1,5 @@
 #include "statsextensions.hpp"
 
-#include <iostream>
 #include <cmath>
 
 #include <components/esm/loadnpc.hpp>
@@ -9,14 +8,14 @@
 
 #include <components/compiler/extensions.hpp>
 #include <components/compiler/opcodes.hpp>
-
+#include <components/debug/debuglog.hpp>
 #include <components/interpreter/interpreter.hpp>
 #include <components/interpreter/runtime.hpp>
 #include <components/interpreter/opcodes.hpp>
 
 #include "../mwbase/environment.hpp"
-#include "../mwbase/dialoguemanager.hpp"
 #include "../mwbase/mechanicsmanager.hpp"
+#include "../mwbase/statemanager.hpp"
 #include "../mwbase/windowmanager.hpp"
 #include "../mwbase/world.hpp"
 
@@ -27,7 +26,6 @@
 #include "../mwmechanics/npcstats.hpp"
 #include "../mwmechanics/actorutil.hpp"
 
-#include "interpretercontext.hpp"
 #include "ref.hpp"
 
 namespace
@@ -245,9 +243,10 @@ namespace MWScript
 
                         if (R()(runtime, false, true).isEmpty())
                         {
-                            std::cerr
+                            Log(Debug::Warning)
                                 << "Warning: Compensating for broken script in Morrowind.esm by "
-                                << "ignoring remote access to dagoth_ur_1" << std::endl;
+                                << "ignoring remote access to dagoth_ur_1";
+
                             return;
                         }
                     }
@@ -260,6 +259,7 @@ namespace MWScript
                         .getDynamic (mIndex));
 
                     stat.setModified (diff + stat.getModified(), 0);
+                    stat.setCurrentModified (diff + stat.getCurrentModified());
 
                     stat.setCurrent (diff + current);
 
@@ -455,10 +455,16 @@ namespace MWScript
                     std::string id = runtime.getStringLiteral (runtime[0].mInteger);
                     runtime.pop();
 
-                    // make sure a spell with this ID actually exists.
-                    MWBase::Environment::get().getWorld()->getStore().get<ESM::Spell>().find (id);
+                    const ESM::Spell* spell = MWBase::Environment::get().getWorld()->getStore().get<ESM::Spell>().find (id);
 
-                    ptr.getClass().getCreatureStats (ptr).getSpells().add (id);
+                    MWMechanics::CreatureStats& creatureStats = ptr.getClass().getCreatureStats(ptr);
+                    creatureStats.getSpells().add(id);
+                    ESM::Spell::SpellType type = static_cast<ESM::Spell::SpellType>(spell->mData.mType);
+                    if (type != ESM::Spell::ST_Spell && type != ESM::Spell::ST_Power)
+                    {
+                        // Apply looping particles immediately for constant effects
+                        MWBase::Environment::get().getWorld()->applyLoopingParticles(ptr);
+                    }
                 }
         };
 
@@ -499,6 +505,7 @@ namespace MWScript
                     runtime.pop();
 
                     ptr.getClass().getCreatureStats (ptr).getActiveSpells().removeEffects(spellid);
+                    ptr.getClass().getCreatureStats (ptr).getSpells().removeEffects(spellid);
                 }
         };
 
@@ -533,7 +540,7 @@ namespace MWScript
 
                     Interpreter::Type_Integer value = 0;
 
-                    if (ptr.getClass().getCreatureStats(ptr).getSpells().hasSpell(id))
+                    if (ptr.getClass().isActor() && ptr.getClass().getCreatureStats(ptr).getSpells().hasSpell(id))
                         value = 1;
 
                     runtime.push (value);
@@ -1012,7 +1019,19 @@ namespace MWScript
                     if (ptr == player)
                         return;
 
-                    ptr.getClass().getNpcStats(ptr).raiseRank(factionID);
+                    // If we already changed rank for this NPC, modify current rank in the NPC stats.
+                    // Otherwise take rank from base NPC record, increase it and put it to NPC data.
+                    int currentRank = ptr.getClass().getNpcStats(ptr).getFactionRank(factionID);
+                    if (currentRank >= 0)
+                        ptr.getClass().getNpcStats(ptr).raiseRank(factionID);
+                    else
+                    {
+                        int rank = ptr.getClass().getPrimaryFactionRank(ptr);
+                        rank++;
+                        ptr.getClass().getNpcStats(ptr).joinFaction(factionID);
+                        for (int i=0; i<rank; i++)
+                            ptr.getClass().getNpcStats(ptr).raiseRank(factionID);
+                    }
                 }
         };
 
@@ -1035,7 +1054,21 @@ namespace MWScript
                     if (ptr == player)
                         return;
 
-                    ptr.getClass().getNpcStats(ptr).lowerRank(factionID);
+                    // If we already changed rank for this NPC, modify current rank in the NPC stats.
+                    // Otherwise take rank from base NPC record, decrease it and put it to NPC data.
+                    int currentRank = ptr.getClass().getNpcStats(ptr).getFactionRank(factionID);
+                    if (currentRank == 0)
+                        return;
+                    else if (currentRank > 0)
+                        ptr.getClass().getNpcStats(ptr).lowerRank(factionID);
+                    else
+                    {
+                        int rank = ptr.getClass().getPrimaryFactionRank(ptr);
+                        rank--;
+                        ptr.getClass().getNpcStats(ptr).joinFaction(factionID);
+                        for (int i=0; i<rank; i++)
+                            ptr.getClass().getNpcStats(ptr).raiseRank(factionID);
+                    }
                 }
         };
 
@@ -1139,7 +1172,11 @@ namespace MWScript
                     MWWorld::Ptr ptr = R()(runtime);
 
                     if (ptr == MWMechanics::getPlayer())
+                    {
                         ptr.getClass().getCreatureStats(ptr).resurrect();
+                        if (MWBase::Environment::get().getStateManager()->getState() == MWBase::StateManager::State_Ended)
+                            MWBase::Environment::get().getStateManager()->resumeGame();
+                    }
                     else if (ptr.getClass().getCreatureStats(ptr).isDead())
                     {
                         bool wasEnabled = ptr.getRefData().isEnabled();
@@ -1149,7 +1186,7 @@ namespace MWScript
                         // HACK: disable/enable object to re-add it to the scene properly (need a new Animation).
                         MWBase::Environment::get().getWorld()->disable(ptr);
                         // resets runtime state such as inventory, stats and AI. does not reset position in the world
-                        ptr.getRefData().setCustomData(NULL);
+                        ptr.getRefData().setCustomData(nullptr);
                         if (wasEnabled)
                             MWBase::Environment::get().getWorld()->enable(ptr);
                     }

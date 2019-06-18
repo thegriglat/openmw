@@ -6,7 +6,7 @@
 
 #ifndef Q_MOC_RUN
 #include <components/files/configurationmanager.hpp>
-#endif
+
 
 #include <components/process/processinvoker.hpp>
 
@@ -14,7 +14,7 @@
 #include <components/config/launchersettings.hpp>
 
 #include <components/settings/settings.hpp>
-
+#endif
 #include "ui_mainwindow.h"
 
 class QListWidgetItem;
@@ -30,6 +30,7 @@ namespace Launcher
     class DataFilesPage;
     class UnshieldThread;
     class SettingsPage;
+    class AdvancedPage;
 
     enum FirstRunDialogResult
     {
@@ -88,6 +89,7 @@ namespace Launcher
         GraphicsPage *mGraphicsPage;
         DataFilesPage *mDataFilesPage;
         SettingsPage *mSettingsPage;
+        AdvancedPage *mAdvancedPage;
 
         Process::ProcessInvoker *mGameInvoker;
         Process::ProcessInvoker *mWizardInvoker;

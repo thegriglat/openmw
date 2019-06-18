@@ -36,6 +36,7 @@
 
 #include "../doc/stage.hpp"
 
+#include "actoradapter.hpp"
 #include "idcollection.hpp"
 #include "nestedidcollection.hpp"
 #include "universalid.hpp"
@@ -110,7 +111,7 @@ namespace CSMWorld
             RefCollection mRefs;
             IdCollection<ESM::Filter> mFilters;
             Collection<MetaData> mMetaData;
-            const Fallback::Map* mFallbackMap;
+            std::unique_ptr<ActorAdapter> mActorAdapter;
             std::vector<QAbstractItemModel *> mModels;
             std::map<UniversalId::Type, QAbstractItemModel *> mModelIndex;
             ESM::ESMReader *mReader;
@@ -144,17 +145,16 @@ namespace CSMWorld
 
             static int count (RecordBase::State state, const CollectionBase& collection);
 
+            void loadFallbackEntries();
+
         public:
 
             Data (ToUTF8::FromType encoding, bool fsStrict, const Files::PathContainer& dataPaths,
-                const std::vector<std::string>& archives, const Fallback::Map* fallback,
-                const boost::filesystem::path& resDir);
+                const std::vector<std::string>& archives, const boost::filesystem::path& resDir);
 
             virtual ~Data();
 
             const VFS::Manager* getVFS() const;
-
-            const Fallback::Map* getFallbackMap() const;
 
             std::shared_ptr<Resource::ResourceSystem> getResourceSystem();
 
@@ -284,6 +284,10 @@ namespace CSMWorld
             ///
             /// \note The returned table may either be the model for the ID itself or the model that
             /// contains the record specified by the ID.
+
+            const ActorAdapter* getActorAdapter() const;
+
+            ActorAdapter* getActorAdapter();
 
             void merge();
             ///< Merge modified into base.

@@ -4,7 +4,10 @@
 #include "windowbase.hpp"
 #include "referenceinterface.hpp"
 
-#include "../mwworld/esmstore.hpp"
+namespace ESM
+{
+    struct Spell;
+}
 
 namespace MyGUI
 {
@@ -16,7 +19,6 @@ namespace MWGui
 {
     class WindowManager;
 }
-
 
 namespace MWGui
 {
@@ -47,8 +49,6 @@ namespace MWGui
             void addSpell(const ESM::Spell& spell);
             void clearSpells();
             int mCurrentY;
-
-            static const int sLineHeight;
 
             void updateLabels();
 

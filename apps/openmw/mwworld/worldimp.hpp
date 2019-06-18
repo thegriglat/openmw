@@ -61,6 +61,11 @@ namespace ToUTF8
 
 struct ContentLoader;
 
+namespace MWPhysics
+{
+    class Object;
+}
+
 namespace MWWorld
 {
     class WeatherManager;
@@ -73,18 +78,10 @@ namespace MWWorld
     {
             Resource::ResourceSystem* mResourceSystem;
 
-            Fallback::Map mFallback;
-            MWRender::RenderingManager* mRendering;
-
-            MWWorld::WeatherManager* mWeatherManager;
-
-            MWWorld::Scene *mWorldScene;
-            MWWorld::Player *mPlayer;
             std::vector<ESM::ESMReader> mEsm;
             MWWorld::ESMStore mStore;
             LocalScripts mLocalScripts;
             MWWorld::Globals mGlobalVariables;
-            MWPhysics::PhysicsSystem *mPhysics;
             bool mSky;
 
             ESM::Variant* mGameHour;
@@ -98,6 +95,12 @@ namespace MWWorld
 
             std::string mCurrentWorldSpace;
 
+            std::unique_ptr<MWWorld::Player> mPlayer;
+            std::unique_ptr<MWPhysics::PhysicsSystem> mPhysics;
+            std::unique_ptr<DetourNavigator::Navigator> mNavigator;
+            std::unique_ptr<MWRender::RenderingManager> mRendering;
+            std::unique_ptr<MWWorld::Scene> mWorldScene;
+            std::unique_ptr<MWWorld::WeatherManager> mWeatherManager;
             std::shared_ptr<ProjectileManager> mProjectileManager;
 
             bool mGodMode;
@@ -106,13 +109,14 @@ namespace MWWorld
 
             std::string mUserDataPath;
 
+            osg::Vec3f mDefaultHalfExtents;
+            bool mShouldUpdateNavigator = false;
+
             // not implemented
             World (const World&);
             World& operator= (const World&);
 
             int mActivationDistanceOverride;
-
-            std::string mStartupScript;
 
             std::map<MWWorld::Ptr, int> mDoorStates;
             ///< only holds doors that are currently moving. 1 = opening, 2 = closing
@@ -124,22 +128,22 @@ namespace MWWorld
 
             void rotateObjectImp (const Ptr& ptr, const osg::Vec3f& rot, bool adjust);
 
-            Ptr moveObjectImp (const Ptr& ptr, float x, float y, float z, bool movePhysics=true);
+            Ptr moveObjectImp (const Ptr& ptr, float x, float y, float z, bool movePhysics=true, bool moveToActive=false);
             ///< @return an updated Ptr in case the Ptr's cell changes
 
             Ptr copyObjectToCell(const ConstPtr &ptr, CellStore* cell, ESM::Position pos, int count, bool adjustPos);
 
             void updateSoundListener();
-            void updatePlayer(bool paused);
+            void updatePlayer();
 
             void preloadSpells();
 
             MWWorld::Ptr getFacedObject(float maxDistance, bool ignorePlayer=true);
 
     public: // FIXME
+            void addContainerScripts(const Ptr& reference, CellStore* cell) override;
             void removeContainerScripts(const Ptr& reference) override;
     private:
-            void addContainerScripts(const Ptr& reference, CellStore* cell);
             void PCDropped (const Ptr& item);
 
             void processDoors(float duration);
@@ -147,6 +151,10 @@ namespace MWWorld
 
             void doPhysics(float duration);
             ///< Run physics simulation and modify \a world accordingly.
+
+            void updateNavigator();
+
+            bool updateNavigatorObject(const MWPhysics::Object* object);
 
             void ensureNeededRecords();
 
@@ -169,6 +177,8 @@ namespace MWWorld
             bool mLevitationEnabled;
             bool mGoToJail;
             int mDaysInPrison;
+            bool mPlayerTraveling;
+            bool mPlayerInJail;
 
             float mSpellPreloadTimer;
 
@@ -186,8 +196,9 @@ namespace MWWorld
                 Resource::ResourceSystem* resourceSystem, SceneUtil::WorkQueue* workQueue,
                 const Files::Collections& fileCollections,
                 const std::vector<std::string>& contentFiles,
-                ToUTF8::Utf8Encoder* encoder, const std::map<std::string,std::string>& fallbackMap,
-                int activationDistanceOverride, const std::string& startCell, const std::string& startupScript, const std::string& resourcePath, const std::string& userDataPath);
+                ToUTF8::Utf8Encoder* encoder, int activationDistanceOverride,
+                const std::string& startCell, const std::string& startupScript,
+                const std::string& resourcePath, const std::string& userDataPath);
 
             virtual ~World();
 
@@ -215,15 +226,17 @@ namespace MWWorld
 
             void setWaterHeight(const float height) override;
 
+            void rotateWorldObject (const MWWorld::Ptr& ptr, osg::Quat rotate) override;
+
             bool toggleWater() override;
             bool toggleWorld() override;
+            bool toggleBorders() override;
 
             void adjustSky() override;
 
-            const Fallback::Map *getFallback() const override;
-
             Player& getPlayer() override;
             MWWorld::Ptr getPlayerPtr() override;
+            MWWorld::ConstPtr getPlayerConstPtr() const override;
 
             const MWWorld::ESMStore& getStore() const override;
 
@@ -272,7 +285,7 @@ namespace MWWorld
             ///< Return a pointer to a liveCellRef with the given name.
             /// \param activeOnly do non search inactive cells.
 
-            Ptr searchPtr (const std::string& name, bool activeOnly) override;
+            Ptr searchPtr (const std::string& name, bool activeOnly, bool searchInContainers = true) override;
             ///< Return a pointer to a liveCellRef with the given name.
             /// \param activeOnly do non search inactive cells.
 
@@ -287,8 +300,8 @@ namespace MWWorld
             ///< Adjust position after load to be on ground. Must be called after model load.
             /// @param force do this even if the ptr is flying
 
-            void fixPosition (const Ptr& actor) override;
-            ///< Attempt to fix position so that the Ptr is no longer inside collision geometry.
+            void fixPosition () override;
+            ///< Attempt to fix position so that the player is not stuck inside the geometry.
 
             void enable (const Ptr& ptr) override;
 
@@ -322,6 +335,8 @@ namespace MWWorld
             void changeWeather (const std::string& region, const unsigned int id) override;
 
             int getCurrentWeather() const override;
+
+            unsigned int getNightDayMode() const override;
 
             int getMasserPhase() const override;
 
@@ -364,7 +379,7 @@ namespace MWWorld
 
             void undeleteObject (const Ptr& ptr) override;
 
-            MWWorld::Ptr moveObject (const Ptr& ptr, float x, float y, float z) override;
+            MWWorld::Ptr moveObject (const Ptr& ptr, float x, float y, float z, bool moveToActive=false) override;
             ///< @return an updated Ptr in case the Ptr's cell changes
 
             MWWorld::Ptr moveObject (const Ptr& ptr, CellStore* newCell, float x, float y, float z, bool movePhysics=true) override;
@@ -398,8 +413,15 @@ namespace MWWorld
             ///< Queues movement for \a ptr (in local space), to be applied in the next call to
             /// doPhysics.
 
-            bool castRay (float x1, float y1, float z1, float x2, float y2, float z2) override;
+            void updateAnimatedCollisionShape(const Ptr &ptr) override;
+
+            bool castRay (float x1, float y1, float z1, float x2, float y2, float z2, int mask) override;
             ///< cast a Ray and return true if there is an object in the ray path.
+
+            bool castRay (float x1, float y1, float z1, float x2, float y2, float z2) override;
+
+            void setActorCollisionMode(const Ptr& ptr, bool internal, bool external) override;
+            bool isActorCollisionEnabled(const Ptr& ptr) override;
 
             bool toggleCollisionMode() override;
             ///< Toggle collision mode for player. If disabled player object should ignore
@@ -459,6 +481,7 @@ namespace MWWorld
             /// \return pointer to created record
 
             void update (float duration, bool paused) override;
+            void updatePhysics (float duration, bool paused) override;
 
             void updateWindowManager () override;
 
@@ -521,6 +544,7 @@ namespace MWWorld
             /// @note throws an exception when invoked on a teleport door
             void activateDoor(const MWWorld::Ptr& door, int state) override;
 
+            void getActorsStandingOn (const MWWorld::ConstPtr& object, std::vector<MWWorld::Ptr> &actors) override; ///< get a list of actors standing on \a object
             bool getPlayerStandingOn (const MWWorld::ConstPtr& object) override; ///< @return true if the player is standing on \a object
             bool getActorStandingOn (const MWWorld::ConstPtr& object) override; ///< @return true if any actor is standing on \a object
             bool getPlayerCollidingWith(const MWWorld::ConstPtr& object) override; ///< @return true if the player is colliding with \a object
@@ -546,12 +570,10 @@ namespace MWWorld
 
             void enableActorCollision(const MWWorld::Ptr& actor, bool enable) override;
 
-            int canRest() override;
-            ///< check if the player is allowed to rest \n
-            /// 0 - yes \n
-            /// 1 - only waiting \n
-            /// 2 - player is underwater \n
-            /// 3 - enemies are nearby (not implemented)
+            RestPermitted canRest() const override;
+            ///< check if the player is allowed to rest
+
+            void rest(double hours) override;
 
             /// \todo Probably shouldn't be here
             MWRender::Animation* getAnimation(const MWWorld::Ptr &ptr) override;
@@ -560,6 +582,7 @@ namespace MWWorld
 
             /// \todo this does not belong here
             void screenshot (osg::Image* image, int w, int h) override;
+            bool screenshot360 (osg::Image* image, std::string settingStr) override;
 
             /// Find center of exterior cell above land surface
             /// \return false if exterior with given name not exists, true otherwise
@@ -599,18 +622,19 @@ namespace MWWorld
              * @brief Cast the actual spell, should be called mid-animation
              * @param actor
              */
-            void castSpell (const MWWorld::Ptr& actor) override;
+            void castSpell (const MWWorld::Ptr& actor, bool manualSpell=false) override;
 
             void launchMagicBolt (const std::string& spellId, const MWWorld::Ptr& caster, const osg::Vec3f& fallbackDirection) override;
-            void launchProjectile (MWWorld::Ptr actor, MWWorld::ConstPtr projectile,
-                                           const osg::Vec3f& worldPos, const osg::Quat& orient, MWWorld::Ptr bow, float speed, float attackStrength) override;
+            void launchProjectile (MWWorld::Ptr& actor, MWWorld::Ptr& projectile,
+                                           const osg::Vec3f& worldPos, const osg::Quat& orient, MWWorld::Ptr& bow, float speed, float attackStrength) override;
 
+            void applyLoopingParticles(const MWWorld::Ptr& ptr) override;
 
             const std::vector<std::string>& getContentFiles() const override;
-
             void breakInvisibility (const MWWorld::Ptr& actor) override;
-            // Are we in an exterior or pseudo-exterior cell and it's night?
-            bool isDark() const override;
+
+            // Allow NPCs to use torches?
+            bool useTorches() const override;
 
             bool findInteriorPositionInWorldSpace(const MWWorld::CellStore* cell, osg::Vec3f& result) override;
 
@@ -640,7 +664,7 @@ namespace MWWorld
             /// Spawn a blood effect for \a ptr at \a worldPosition
             void spawnBloodEffect (const MWWorld::Ptr& ptr, const osg::Vec3f& worldPosition) override;
 
-            void spawnEffect (const std::string& model, const std::string& textureOverride, const osg::Vec3f& worldPos) override;
+            void spawnEffect (const std::string& model, const std::string& textureOverride, const osg::Vec3f& worldPos, float scale = 1.f, bool isMagicVFX = true) override;
 
             void explodeSpell(const osg::Vec3f& origin, const ESM::EffectList& effects, const MWWorld::Ptr& caster, const MWWorld::Ptr& ignore,
                                       ESM::RangeType rangeType, const std::string& id, const std::string& sourceName,
@@ -668,6 +692,9 @@ namespace MWWorld
 
             bool isPlayerInJail() const override;
 
+            void setPlayerTraveling(bool traveling) override;
+            bool isPlayerTraveling() const override;
+
             /// Return terrain height at \a worldPos position.
             float getTerrainHeightAt(const osg::Vec3f& worldPos) const override;
 
@@ -680,6 +707,18 @@ namespace MWWorld
 
             /// Preload VFX associated with this effect list
             void preloadEffects(const ESM::EffectList* effectList) override;
+
+            DetourNavigator::Navigator* getNavigator() const override;
+
+            void updateActorPath(const MWWorld::ConstPtr& actor, const std::deque<osg::Vec3f>& path,
+                    const osg::Vec3f& halfExtents, const osg::Vec3f& start, const osg::Vec3f& end) const override;
+
+            void removeActorPath(const MWWorld::ConstPtr& actor) const override;
+
+            void setNavMeshNumberToRender(const std::size_t value) override;
+
+            /// Return physical half extents of the given actor to be used in pathfinding
+            osg::Vec3f getPathfindingHalfExtents(const MWWorld::ConstPtr& actor) const override;
     };
 }
 

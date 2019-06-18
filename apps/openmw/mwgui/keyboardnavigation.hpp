@@ -14,7 +14,7 @@ namespace MWGui
         ~KeyboardNavigation();
 
         /// @return Was the key handled by this class?
-        bool injectKeyPress(MyGUI::KeyCode key, unsigned int text);
+        bool injectKeyPress(MyGUI::KeyCode key, unsigned int text, bool repeat);
 
         void saveFocus(int mode);
         void restoreFocus(int mode);
@@ -28,6 +28,8 @@ namespace MWGui
 
         void setModalWindow(MyGUI::Widget* window);
 
+        void setEnabled(bool enabled);
+
     private:
         bool switchFocus(int direction, bool wrap);
 
@@ -40,6 +42,8 @@ namespace MWGui
 
         MyGUI::Widget* mCurrentFocus;
         MyGUI::Widget* mModalWindow;
+
+        bool mEnabled;
     };
 
 }

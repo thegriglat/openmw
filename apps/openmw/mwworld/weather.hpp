@@ -7,6 +7,8 @@
 
 #include <osg/Vec4f>
 
+#include <components/fallback/fallback.hpp>
+
 #include "../mwbase/soundmanager.hpp"
 
 #include "../mwrender/sky.hpp"
@@ -38,6 +40,20 @@ namespace MWWorld
 {
     class TimeStamp;
 
+    enum NightDayMode
+    {
+        Default = 0,
+        ExteriorNight = 1,
+        InteriorDay = 2
+    };
+
+    struct WeatherSetting
+    {
+        float mPreSunriseTime;
+        float mPostSunriseTime;
+        float mPreSunsetTime;
+        float mPostSunsetTime;
+    };
 
     struct TimeOfDaySettings
     {
@@ -45,7 +61,37 @@ namespace MWWorld
         float mNightEnd;
         float mDayStart;
         float mDayEnd;
-        float mSunriseTime;
+
+        std::map<std::string, WeatherSetting> mSunriseTransitions;
+
+        float mStarsPostSunsetStart;
+        float mStarsPreSunriseFinish;
+        float mStarsFadingDuration;
+
+        WeatherSetting getSetting(const std::string& type) const
+        {
+            std::map<std::string, WeatherSetting>::const_iterator it = mSunriseTransitions.find(type);
+            if (it != mSunriseTransitions.end())
+            {
+                return it->second;
+            }
+            else
+            {
+                return { 1.f, 1.f, 1.f, 1.f };
+            }
+        }
+
+        void addSetting(const std::string& type)
+        {
+            WeatherSetting setting = {
+                Fallback::Map::getFloat("Weather_" + type + "_Pre-Sunrise_Time"),
+                Fallback::Map::getFloat("Weather_" + type + "_Post-Sunrise_Time"),
+                Fallback::Map::getFloat("Weather_" + type + "_Pre-Sunset_Time"),
+                Fallback::Map::getFloat("Weather_" + type + "_Post-Sunset_Time")
+            };
+
+            mSunriseTransitions[type] = setting;
+        }
     };
 
     /// Interpolates between 4 data points (sunrise, day, sunset, night) based on the time of day.
@@ -59,7 +105,7 @@ namespace MWWorld
         {
         }
 
-        T getValue (const float gameHour, const TimeOfDaySettings& timeSettings) const;
+        T getValue (const float gameHour, const TimeOfDaySettings& timeSettings, const std::string& prefix) const;
 
     private:
         T mSunriseValue, mDayValue, mSunsetValue, mNightValue;
@@ -70,9 +116,10 @@ namespace MWWorld
     {
     public:
         Weather(const std::string& name,
-                const Fallback::Map& fallback,
                 float stormWindSpeed,
                 float rainSpeed,
+                float dlFactor,
+                float dlOffset,
                 const std::string& particleEffect);
 
         std::string mCloudTexture;
@@ -101,6 +148,12 @@ namespace MWWorld
         // Value between 0 and 1, defines the strength of the sun glare effect.
         // Also appears to modify how visible the sun, moons, and stars are for various weather effects.
         float mGlareView;
+
+        // Fog factor and offset used with distant land rendering.
+        struct {
+            float FogFactor;
+            float FogOffset;
+        } mDL;
 
         // Sound effect
         // This is used for Blight, Ashstorm and Blizzard (Bloodmoon)
@@ -176,7 +229,7 @@ namespace MWWorld
     class MoonModel
     {
     public:
-        MoonModel(const std::string& name, const Fallback::Map& fallback);
+        MoonModel(const std::string& name);
 
         MWRender::MoonState calculateState(const TimeStamp& gameTime) const;
 
@@ -206,9 +259,7 @@ namespace MWWorld
     {
     public:
         // Have to pass fallback and Store, can't use singleton since World isn't fully constructed yet at the time
-        WeatherManager(MWRender::RenderingManager& rendering,
-                       const Fallback::Map& fallback,
-                       MWWorld::ESMStore& store);
+        WeatherManager(MWRender::RenderingManager& rendering, MWWorld::ESMStore& store);
         ~WeatherManager();
 
         /**
@@ -218,18 +269,19 @@ namespace MWWorld
          */
         void changeWeather(const std::string& regionID, const unsigned int weatherID);
         void modRegion(const std::string& regionID, const std::vector<char>& chances);
-        void playerTeleported();
+        void playerTeleported(const std::string& playerRegion, bool isExterior);
 
         /**
          * Per-frame update
          * @param duration
          * @param paused
          */
-        void update(float duration, bool paused = false);
+        void update(float duration, bool paused, const TimeStamp& time, bool isExterior);
 
         void stopSounds();
 
         float getWindSpeed() const;
+        NightDayMode getNightDayMode() const;
 
         /// Are we in an ash or blight storm?
         bool isInStorm() const;
@@ -240,8 +292,7 @@ namespace MWWorld
 
         unsigned int getWeatherID() const;
 
-        /// @see World::isDark
-        bool isDark() const;
+        bool useTorches(float hour) const;
 
         void write(ESM::ESMWriter& writer, Loading::Listener& progress);
 
@@ -275,6 +326,7 @@ namespace MWWorld
 
         float mWindSpeed;
         bool mIsStorm;
+        bool mPrecipitation;
         osg::Vec3f mStormDirection;
 
         std::string mCurrentRegion;
@@ -282,6 +334,7 @@ namespace MWWorld
         bool mFastForward;
         float mWeatherUpdateTime;
         float mTransitionFactor;
+        NightDayMode mNightDayMode;
         int mCurrentWeather;
         int mNextWeather;
         int mQueuedWeather;
@@ -292,7 +345,7 @@ namespace MWWorld
         std::string mPlayingSoundID;
 
         void addWeather(const std::string& name,
-                        const Fallback::Map& fallback,
+                        float dlFactor, float dlOffset,
                         const std::string& particleEffect = "");
 
         void importRegions();

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <MyGUI type="Layout">
-    <Widget type="ExposedWindow" skin="MW_Window_Pinnable" layer="Windows" position="0 0 600 300" name="_Main">
+    <Widget type="Window" skin="MW_Window_Pinnable" layer="Windows" position="0 0 600 300" name="_Main">
         <Property key="MinSize" value="40 40"/>
 
         <Widget type="Widget" skin="" position="0 0 224 223" align="Left Top" name="LeftPane">
@@ -29,7 +29,7 @@
             </Widget>
 
             <!-- Categories -->
-            <Widget type="HBox" position="0 8 350 24" align="Left Top HStretch" name="Categories">
+            <Widget type="HBox" position="0 6 350 28" align="Left Top HStretch" name="Categories">
                 <Widget type="AutoSizedButton" skin="MW_Button" position="0 0 60 24" name="AllButton">
                     <Property key="Caption" value="#{sAllTab}"/>
                     <Property key="NeedKey" value="false"/>

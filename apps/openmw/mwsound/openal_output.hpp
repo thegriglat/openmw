@@ -26,10 +26,10 @@ namespace MWSound
         struct {
             bool EXT_EFX : 1;
             bool SOFT_HRTF : 1;
-        } ALC;
+        } ALC = {false, false};
         struct {
             bool SOFT_source_spatialize : 1;
-        } AL;
+        } AL = {false};
 
         typedef std::deque<ALuint> IDDq;
         IDDq mFreeSources;
@@ -75,7 +75,7 @@ namespace MWSound
         virtual bool isSoundPlaying(Sound *sound);
         virtual void updateSound(Sound *sound);
 
-        virtual bool streamSound(DecoderPtr decoder, Stream *sound);
+        virtual bool streamSound(DecoderPtr decoder, Stream *sound, bool getLoudnessData=false);
         virtual bool streamSound3D(DecoderPtr decoder, Stream *sound, bool getLoudnessData);
         virtual void finishStream(Stream *sound);
         virtual double getStreamDelay(Stream *sound);

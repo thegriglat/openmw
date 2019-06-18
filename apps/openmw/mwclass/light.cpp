@@ -5,20 +5,16 @@
 #include <components/settings/settings.hpp>
 
 #include "../mwbase/environment.hpp"
-#include "../mwbase/world.hpp"
 #include "../mwbase/soundmanager.hpp"
 #include "../mwbase/windowmanager.hpp"
-#include "../mwbase/mechanicsmanager.hpp"
 
 #include "../mwworld/ptr.hpp"
-#include "../mwworld/actiontake.hpp"
 #include "../mwworld/actionequip.hpp"
 #include "../mwworld/nullaction.hpp"
 #include "../mwworld/failedaction.hpp"
 #include "../mwworld/inventorystore.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwphysics/physicssystem.hpp"
-#include "../mwworld/customdata.hpp"
 
 #include "../mwgui/tooltips.hpp"
 
@@ -41,7 +37,7 @@ namespace MWClass
     {
         MWWorld::LiveCellRef<ESM::Light> *ref =
             ptr.get<ESM::Light>();
-        assert (ref->mBase != NULL);
+        assert (ref->mBase != nullptr);
 
         // TODO: add option somewhere to enable collision for placeable objects
         if (!model.empty() && (ref->mBase->mData.mFlags & ESM::Light::Carry) == 0)
@@ -161,7 +157,12 @@ namespace MWClass
         std::string text;
 
         if (Settings::Manager::getBool("show effect duration","Game"))
-            text += "\n#{sDuration}: " + MWGui::ToolTips::toString(ptr.getClass().getRemainingUsageTime(ptr));
+        {
+            // -1 is infinite light source, so duration makes no sense here. Other negative values are treated as 0.
+            float remainingTime = ptr.getClass().getRemainingUsageTime(ptr);
+            if (remainingTime != -1.0f)
+                text += "\n#{sDuration}: " + MWGui::ToolTips::toString(std::max(0.f, remainingTime));
+        }
 
         text += MWGui::ToolTips::getWeightString(ref->mBase->mData.mWeight, "#{sWeight}");
         text += MWGui::ToolTips::getValueString(ref->mBase->mData.mValue, "#{sValue}");
@@ -186,9 +187,9 @@ namespace MWClass
         return Class::showsInInventory(ptr);
     }
 
-    std::shared_ptr<MWWorld::Action> Light::use (const MWWorld::Ptr& ptr) const
+    std::shared_ptr<MWWorld::Action> Light::use (const MWWorld::Ptr& ptr, bool force) const
     {
-        std::shared_ptr<MWWorld::Action> action(new MWWorld::ActionEquip(ptr));
+        std::shared_ptr<MWWorld::Action> action(new MWWorld::ActionEquip(ptr, force));
 
         action->setSound(getUpSoundId(ptr));
 
@@ -233,24 +234,6 @@ namespace MWClass
         if (!(ref->mBase->mData.mFlags & ESM::Light::Carry))
             return std::make_pair(0,"");
 
-        const MWWorld::InventoryStore& invStore = npc.getClass().getInventoryStore(npc);
-        MWWorld::ConstContainerStoreIterator weapon = invStore.getSlot(MWWorld::InventoryStore::Slot_CarriedRight);
-
-        if(weapon == invStore.end())
-            return std::make_pair(1,"");
-
-        /// \todo the 2h check is repeated many times; put it in a function
-        if(weapon->getTypeName() == typeid(ESM::Weapon).name() &&
-                (weapon->get<ESM::Weapon>()->mBase->mData.mType == ESM::Weapon::LongBladeTwoHand ||
-        weapon->get<ESM::Weapon>()->mBase->mData.mType == ESM::Weapon::BluntTwoClose ||
-        weapon->get<ESM::Weapon>()->mBase->mData.mType == ESM::Weapon::BluntTwoWide ||
-        weapon->get<ESM::Weapon>()->mBase->mData.mType == ESM::Weapon::SpearTwoWide ||
-        weapon->get<ESM::Weapon>()->mBase->mData.mType == ESM::Weapon::AxeTwoHand ||
-        weapon->get<ESM::Weapon>()->mBase->mData.mType == ESM::Weapon::MarksmanBow ||
-        weapon->get<ESM::Weapon>()->mBase->mData.mType == ESM::Weapon::MarksmanCrossbow))
-        {
-            return std::make_pair(3,"");
-        }
         return std::make_pair(1,"");
     }
 

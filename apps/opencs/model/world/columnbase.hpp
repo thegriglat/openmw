@@ -46,6 +46,7 @@ namespace CSMWorld
             Display_Skill,
             Display_Class,
             Display_Faction,
+            Display_Rank,
             Display_Race,
             Display_Sound,
             Display_Region,
@@ -85,9 +86,13 @@ namespace CSMWorld
             Display_Enchantment,
             //CONCRETE TYPES ENDS HERE
 
+            Display_SignedInteger8,
+            Display_SignedInteger16,
             Display_UnsignedInteger8,
+            Display_UnsignedInteger16,
             Display_Integer,
             Display_Float,
+            Display_Double,
             Display_Var,
             Display_GmstVarType,
             Display_GlobalVarType,

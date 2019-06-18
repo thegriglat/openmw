@@ -25,10 +25,10 @@ namespace MWGui
         : WindowBase("openmw_mainmenu.layout")
         , mWidth (w), mHeight (h)
         , mVFS(vfs), mButtonBox(0)
-        , mBackground(NULL)
-        , mVideoBackground(NULL)
-        , mVideo(NULL)
-        , mSaveGameDialog(NULL)
+        , mBackground(nullptr)
+        , mVideoBackground(nullptr)
+        , mVideo(nullptr)
+        , mSaveGameDialog(nullptr)
     {
         getWidget(mVersionText, "VersionText");
         mVersionText->setCaption(versionDescription);
@@ -147,13 +147,13 @@ namespace MWGui
         if (mVideo && !show)
         {
             MyGUI::Gui::getInstance().destroyWidget(mVideoBackground);
-            mVideoBackground = NULL;
-            mVideo = NULL;
+            mVideoBackground = nullptr;
+            mVideo = nullptr;
         }
         if (mBackground && !show)
         {
             MyGUI::Gui::getInstance().destroyWidget(mBackground);
-            mBackground = NULL;
+            mBackground = nullptr;
         }
 
         if (!show)
@@ -253,48 +253,50 @@ namespace MWGui
 
         // Create new buttons if needed
         std::vector<std::string> allButtons { "return", "newgame", "savegame", "loadgame", "options", "credits", "exitgame"};
-        for (std::vector<std::string>::iterator it = allButtons.begin(); it != allButtons.end(); ++it)
+        for (std::string& buttonId : allButtons)
         {
-            if (mButtons.find(*it) == mButtons.end())
+            if (mButtons.find(buttonId) == mButtons.end())
             {
                 Gui::ImageButton* button = mButtonBox->createWidget<Gui::ImageButton>
                         ("ImageBox", MyGUI::IntCoord(0, curH, 0, 0), MyGUI::Align::Default);
-                button->setProperty("ImageHighlighted", "textures\\menu_" + *it + "_over.dds");
-                button->setProperty("ImageNormal", "textures\\menu_" + *it + ".dds");
-                button->setProperty("ImagePushed", "textures\\menu_" + *it + "_pressed.dds");
+                button->setProperty("ImageHighlighted", "textures\\menu_" + buttonId + "_over.dds");
+                button->setProperty("ImageNormal", "textures\\menu_" + buttonId + ".dds");
+                button->setProperty("ImagePushed", "textures\\menu_" + buttonId + "_pressed.dds");
                 button->eventMouseButtonClick += MyGUI::newDelegate(this, &MainMenu::onButtonClicked);
-                button->setUserData(std::string(*it));
-                mButtons[*it] = button;
+                button->setUserData(std::string(buttonId));
+                mButtons[buttonId] = button;
             }
         }
 
         // Start by hiding all buttons
         int maxwidth = 0;
-        for (std::map<std::string, Gui::ImageButton*>::iterator it = mButtons.begin(); it != mButtons.end(); ++it)
+        for (auto& buttonPair : mButtons)
         {
-            it->second->setVisible(false);
-            MyGUI::IntSize requested = it->second->getRequestedSize();
+            buttonPair.second->setVisible(false);
+            MyGUI::IntSize requested = buttonPair.second->getRequestedSize();
             if (requested.width > maxwidth)
                 maxwidth = requested.width;
         }
 
         // Now show and position the ones we want
-        for (std::vector<std::string>::iterator it = buttons.begin(); it != buttons.end(); ++it)
+        for (std::string& buttonId : buttons)
         {
-            assert(mButtons.find(*it) != mButtons.end());
-            Gui::ImageButton* button = mButtons[*it];
+            assert(mButtons.find(buttonId) != mButtons.end());
+            Gui::ImageButton* button = mButtons[buttonId];
             button->setVisible(true);
 
+            // By default, assume that all menu buttons textures should have 64 height.
+            // If they have a different resolution, scale them.
             MyGUI::IntSize requested = button->getRequestedSize();
+            float scale = requested.height / 64.f;
 
+            button->setImageCoord(MyGUI::IntCoord(0, 0, requested.width, requested.height));
             // Trim off some of the excessive padding
             // TODO: perhaps do this within ImageButton?
-            int trim = 8;
-            button->setImageCoord(MyGUI::IntCoord(0, trim, requested.width, requested.height-trim));
-            int height = requested.height-trim*2;
-            button->setImageTile(MyGUI::IntSize(requested.width, height));
-            button->setCoord((maxwidth-requested.width) / 2, curH, requested.width, height);
-            curH += height;
+            int height = requested.height;
+            button->setImageTile(MyGUI::IntSize(requested.width, requested.height-16*scale));
+            button->setCoord((maxwidth-requested.width/scale) / 2, curH, requested.width/scale, height/scale-16);
+            curH += height/scale-16;
         }
 
         if (state == MWBase::StateManager::State_NoGame)

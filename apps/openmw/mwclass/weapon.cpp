@@ -1,6 +1,7 @@
 #include "weapon.hpp"
 
 #include <components/esm/loadweap.hpp>
+#include <components/misc/constants.hpp>
 #include <components/settings/settings.hpp>
 
 #include "../mwbase/environment.hpp"
@@ -9,7 +10,6 @@
 #include "../mwbase/windowmanager.hpp"
 
 #include "../mwworld/ptr.hpp"
-#include "../mwworld/actiontake.hpp"
 #include "../mwworld/actionequip.hpp"
 #include "../mwworld/inventorystore.hpp"
 #include "../mwworld/cellstore.hpp"
@@ -65,7 +65,7 @@ namespace MWClass
     {
         const MWWorld::LiveCellRef<ESM::Weapon> *ref = ptr.get<ESM::Weapon>();
 
-        return (ref->mBase->mData.mType < 11); // thrown weapons and arrows/bolts don't have health, only quantity
+        return (ref->mBase->mData.mType < ESM::Weapon::MarksmanThrown); // thrown weapons and arrows/bolts don't have health, only quantity
     }
 
     int Weapon::getItemMaxHealth (const MWWorld::ConstPtr& ptr) const
@@ -264,34 +264,45 @@ namespace MWClass
         std::string text;
 
         // weapon type & damage
-        if ((ref->mBase->mData.mType < 12 || Settings::Manager::getBool("show projectile damage", "Game")) && ref->mBase->mData.mType < 14)
+        if ((ref->mBase->mData.mType < ESM::Weapon::Arrow || Settings::Manager::getBool("show projectile damage", "Game")) && ref->mBase->mData.mType <= ESM::Weapon::Bolt)
         {
             text += "\n#{sType} ";
 
-            std::map <int, std::pair <std::string, std::string> > mapping;
-            mapping[ESM::Weapon::ShortBladeOneHand] = std::make_pair("sSkillShortblade", "sOneHanded");
-            mapping[ESM::Weapon::LongBladeOneHand] = std::make_pair("sSkillLongblade", "sOneHanded");
-            mapping[ESM::Weapon::LongBladeTwoHand] = std::make_pair("sSkillLongblade", "sTwoHanded");
-            mapping[ESM::Weapon::BluntOneHand] = std::make_pair("sSkillBluntweapon", "sOneHanded");
-            mapping[ESM::Weapon::BluntTwoClose] = std::make_pair("sSkillBluntweapon", "sTwoHanded");
-            mapping[ESM::Weapon::BluntTwoWide] = std::make_pair("sSkillBluntweapon", "sTwoHanded");
-            mapping[ESM::Weapon::SpearTwoWide] = std::make_pair("sSkillSpear", "sTwoHanded");
-            mapping[ESM::Weapon::AxeOneHand] = std::make_pair("sSkillAxe", "sOneHanded");
-            mapping[ESM::Weapon::AxeTwoHand] = std::make_pair("sSkillAxe", "sTwoHanded");
-            mapping[ESM::Weapon::MarksmanBow] = std::make_pair("sSkillMarksman", "");
-            mapping[ESM::Weapon::MarksmanCrossbow] = std::make_pair("sSkillMarksman", "");
-            mapping[ESM::Weapon::MarksmanThrown] = std::make_pair("sSkillMarksman", "");
-            mapping[ESM::Weapon::Arrow] = std::make_pair("sSkillMarksman", "");
-            mapping[ESM::Weapon::Bolt] = std::make_pair("sSkillMarksman", "");
+            static std::map <int, std::pair <std::string, std::string> > mapping;
+            if (mapping.empty())
+            {
+                mapping[ESM::Weapon::ShortBladeOneHand] = std::make_pair("sSkillShortblade", "sOneHanded");
+                mapping[ESM::Weapon::LongBladeOneHand] = std::make_pair("sSkillLongblade", "sOneHanded");
+                mapping[ESM::Weapon::LongBladeTwoHand] = std::make_pair("sSkillLongblade", "sTwoHanded");
+                mapping[ESM::Weapon::BluntOneHand] = std::make_pair("sSkillBluntweapon", "sOneHanded");
+                mapping[ESM::Weapon::BluntTwoClose] = std::make_pair("sSkillBluntweapon", "sTwoHanded");
+                mapping[ESM::Weapon::BluntTwoWide] = std::make_pair("sSkillBluntweapon", "sTwoHanded");
+                mapping[ESM::Weapon::SpearTwoWide] = std::make_pair("sSkillSpear", "sTwoHanded");
+                mapping[ESM::Weapon::AxeOneHand] = std::make_pair("sSkillAxe", "sOneHanded");
+                mapping[ESM::Weapon::AxeTwoHand] = std::make_pair("sSkillAxe", "sTwoHanded");
+                mapping[ESM::Weapon::MarksmanBow] = std::make_pair("sSkillMarksman", "");
+                mapping[ESM::Weapon::MarksmanCrossbow] = std::make_pair("sSkillMarksman", "");
+                mapping[ESM::Weapon::MarksmanThrown] = std::make_pair("sSkillMarksman", "");
+                mapping[ESM::Weapon::Arrow] = std::make_pair("sSkillMarksman", "");
+                mapping[ESM::Weapon::Bolt] = std::make_pair("sSkillMarksman", "");
+            }
 
-            std::string type = mapping[ref->mBase->mData.mType].first;
-            std::string oneOrTwoHanded = mapping[ref->mBase->mData.mType].second;
+            const std::string type = mapping[ref->mBase->mData.mType].first;
+            const std::string oneOrTwoHanded = mapping[ref->mBase->mData.mType].second;
 
-            text += store.get<ESM::GameSetting>().find(type)->getString() +
-                ((oneOrTwoHanded != "") ? ", " + store.get<ESM::GameSetting>().find(oneOrTwoHanded)->getString() : "");
+            text += store.get<ESM::GameSetting>().find(type)->mValue.getString() +
+                ((oneOrTwoHanded != "") ? ", " + store.get<ESM::GameSetting>().find(oneOrTwoHanded)->mValue.getString() : "");
 
             // weapon damage
-            if (ref->mBase->mData.mType >= 9)
+            if (ref->mBase->mData.mType == ESM::Weapon::MarksmanThrown)
+            {
+                // Thrown weapons have 2x real damage applied
+                // as they're both the weapon and the ammo
+                text += "\n#{sAttack}: "
+                    + MWGui::ToolTips::toString(static_cast<int>(ref->mBase->mData.mChop[0] * 2))
+                    + " - " + MWGui::ToolTips::toString(static_cast<int>(ref->mBase->mData.mChop[1] * 2));
+            }
+            else if (ref->mBase->mData.mType >= ESM::Weapon::MarksmanBow)
             {
                 // marksman
                 text += "\n#{sAttack}: "
@@ -315,18 +326,26 @@ namespace MWClass
             }
         }
 
-        if (ref->mBase->mData.mType < 11) // thrown weapons and arrows/bolts don't have health, only quantity
+        if (hasItemHealth(ptr))
         {
             int remainingHealth = getItemHealth(ptr);
             text += "\n#{sCondition}: " + MWGui::ToolTips::toString(remainingHealth) + "/"
                     + MWGui::ToolTips::toString(ref->mBase->mData.mHealth);
         }
 
-        // add reach and attack speed for melee weapon
-        if (ref->mBase->mData.mType < 9 && Settings::Manager::getBool("show melee info", "Game"))
+        const bool verbose = Settings::Manager::getBool("show melee info", "Game");
+        // add reach for melee weapon
+        if (ref->mBase->mData.mType < ESM::Weapon::MarksmanBow && verbose)
         {
-            text += MWGui::ToolTips::getPercentString(ref->mBase->mData.mReach, "#{sRange}");
+            // display value in feet
+            const float combatDistance = store.get<ESM::GameSetting>().find("fCombatDistance")->mValue.getFloat() * ref->mBase->mData.mReach;
+            text += MWGui::ToolTips::getWeightString(combatDistance / Constants::UnitsPerFoot, "#{sRange}");
+            text += " #{sFeet}";
+        }
 
+        // add attack speed for any weapon excepts arrows and bolts
+        if (ref->mBase->mData.mType < ESM::Weapon::Arrow && verbose)
+        {
             text += MWGui::ToolTips::getPercentString(ref->mBase->mData.mSpeed, "#{sAttributeSpeed}");
         }
 
@@ -371,7 +390,7 @@ namespace MWClass
 
     std::pair<int, std::string> Weapon::canBeEquipped(const MWWorld::ConstPtr &ptr, const MWWorld::Ptr &npc) const
     {
-        if (hasItemHealth(ptr) && ptr.getCellRef().getCharge() == 0)
+        if (hasItemHealth(ptr) && getItemHealth(ptr) == 0)
             return std::make_pair(0, "#{sInventoryMessage1}");
 
         // Do not allow equip weapons from inventory during attack
@@ -379,7 +398,7 @@ namespace MWClass
             && MWBase::Environment::get().getWindowManager()->isGuiMode())
             return std::make_pair(0, "#{sCantEquipWeapWarning}");
 
-        std::pair<std::vector<int>, bool> slots_ = ptr.getClass().getEquipmentSlots(ptr);
+        std::pair<std::vector<int>, bool> slots_ = getEquipmentSlots(ptr);
 
         if (slots_.first.empty())
             return std::make_pair (0, "");
@@ -398,9 +417,9 @@ namespace MWClass
         return std::make_pair(1, "");
     }
 
-    std::shared_ptr<MWWorld::Action> Weapon::use (const MWWorld::Ptr& ptr) const
+    std::shared_ptr<MWWorld::Action> Weapon::use (const MWWorld::Ptr& ptr, bool force) const
     {
-        std::shared_ptr<MWWorld::Action> action(new MWWorld::ActionEquip(ptr));
+        std::shared_ptr<MWWorld::Action> action(new MWWorld::ActionEquip(ptr, force));
 
         action->setSound(getUpSoundId(ptr));
 

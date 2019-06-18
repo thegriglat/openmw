@@ -2,11 +2,14 @@
 
 #include <memory>
 #include <sstream>
+#include <string>
 
 #include <QMouseEvent>
 #include <QApplication>
 
 #include <components/esm/loadland.hpp>
+
+#include <components/misc/constants.hpp>
 
 #include "../../model/prefs/shortcut.hpp"
 
@@ -21,6 +24,7 @@
 #include "mask.hpp"
 #include "cameracontroller.hpp"
 #include "cellarrow.hpp"
+#include "terraintexturemode.hpp"
 
 bool CSVRender::PagedWorldspaceWidget::adjustCells()
 {
@@ -136,7 +140,7 @@ void CSVRender::PagedWorldspaceWidget::addEditModeSelectorButtons (
         new EditMode (this, QIcon (":placeholder"), Mask_Reference, "Terrain shape editing"),
         "terrain-shape");
     tool->addButton (
-        new EditMode (this, QIcon (":placeholder"), Mask_Reference, "Terrain texture editing"),
+        new TerrainTextureMode (this, tool),
         "terrain-texture");
     tool->addButton (
         new EditMode (this, QIcon (":placeholder"), Mask_Reference, "Terrain vertex paint editing"),
@@ -505,13 +509,11 @@ void CSVRender::PagedWorldspaceWidget::moveCellSelection (int x, int y)
 
 void CSVRender::PagedWorldspaceWidget::addCellToSceneFromCamera (int offsetX, int offsetY)
 {
-    const int CellSize = 8192;
-
     osg::Vec3f eye, center, up;
     getCamera()->getViewMatrixAsLookAt(eye, center, up);
 
-    int cellX = (int)std::floor(center.x() / CellSize) + offsetX;
-    int cellY = (int)std::floor(center.y() / CellSize) + offsetY;
+    int cellX = (int)std::floor(center.x() / Constants::CellSizeInUnits) + offsetX;
+    int cellY = (int)std::floor(center.y() / Constants::CellSizeInUnits) + offsetY;
 
     CSMWorld::CellCoordinates cellCoordinates(cellX, cellY);
 
@@ -526,7 +528,7 @@ void CSVRender::PagedWorldspaceWidget::addCellToSceneFromCamera (int offsetX, in
 
 CSVRender::PagedWorldspaceWidget::PagedWorldspaceWidget (QWidget* parent, CSMDoc::Document& document)
 : WorldspaceWidget (document, parent), mDocument (document), mWorldspace ("std::default"),
-  mControlElements(NULL), mDisplayCellCoord(true)
+  mControlElements(nullptr), mDisplayCellCoord(true)
 {
     QAbstractItemModel *cells =
         document.getData().getTableModel (CSMWorld::UniversalId::Type_Cells);
@@ -614,7 +616,39 @@ void CSVRender::PagedWorldspaceWidget::useViewHint (const std::string& hint)
         }
         else if (hint[0]=='r')
         {
-            /// \todo implement 'r' type hints
+            // syntax r:ref#number (e.g. r:ref#100)
+            char ignore;
+
+            std::istringstream stream (hint.c_str());
+            if (stream >> ignore) // ignore r
+            {
+                char ignore1; // : or ;
+
+                std::string refCode; // ref#number (e.g. ref#100)
+
+                while (stream >> ignore1 >> refCode) {}
+
+                //Find out cell coordinate
+                CSMWorld::IdTable& references = dynamic_cast<CSMWorld::IdTable&> (
+                    *mDocument.getData().getTableModel (CSMWorld::UniversalId::Type_References));
+                int cellColumn = references.findColumnIndex(CSMWorld::Columns::ColumnId_Cell);
+                QVariant cell = references.data(references.getModelIndex(refCode, cellColumn)).value<QVariant>();
+                QString cellqs = cell.toString();
+                std::istringstream streamCellCoord (cellqs.toStdString().c_str());
+
+                if (streamCellCoord >> ignore) //ignore #
+                {
+                    // Current coordinate
+                    int x, y;
+
+                    // Loop through all the coordinates to add them to selection
+                    while (streamCellCoord >> x >> y)
+                        selection.add (CSMWorld::CellCoordinates (x, y));
+
+                    // Mark that camera needs setup
+                    mCamPositionSet=false;
+                }
+            }
         }
 
         setCellSelection (selection);
@@ -737,22 +771,18 @@ void CSVRender::PagedWorldspaceWidget::selectAllWithSameParentId (int elementMas
 
 std::string CSVRender::PagedWorldspaceWidget::getCellId (const osg::Vec3f& point) const
 {
-    const int cellSize = 8192;
-
     CSMWorld::CellCoordinates cellCoordinates (
-        static_cast<int> (std::floor (point.x()/cellSize)),
-        static_cast<int> (std::floor (point.y()/cellSize)));
+        static_cast<int> (std::floor (point.x() / Constants::CellSizeInUnits)),
+        static_cast<int> (std::floor (point.y() / Constants::CellSizeInUnits)));
 
     return cellCoordinates.getId (mWorldspace);
 }
 
 CSVRender::Cell* CSVRender::PagedWorldspaceWidget::getCell(const osg::Vec3d& point) const
 {
-    const int cellSize = 8192;
-
     CSMWorld::CellCoordinates coords(
-        static_cast<int> (std::floor (point.x()/cellSize)),
-        static_cast<int> (std::floor (point.y()/cellSize)));
+        static_cast<int> (std::floor (point.x() / Constants::CellSizeInUnits)),
+        static_cast<int> (std::floor (point.y() / Constants::CellSizeInUnits)));
 
     std::map<CSMWorld::CellCoordinates, Cell*>::const_iterator searchResult = mCells.find(coords);
     if (searchResult != mCells.end())

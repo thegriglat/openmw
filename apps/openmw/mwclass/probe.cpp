@@ -4,11 +4,9 @@
 
 #include "../mwbase/environment.hpp"
 #include "../mwbase/mechanicsmanager.hpp"
-#include "../mwbase/world.hpp"
 #include "../mwbase/windowmanager.hpp"
 
 #include "../mwworld/ptr.hpp"
-#include "../mwworld/actiontake.hpp"
 #include "../mwworld/actionequip.hpp"
 #include "../mwworld/inventorystore.hpp"
 #include "../mwworld/cellstore.hpp"
@@ -140,9 +138,9 @@ namespace MWClass
         return info;
     }
 
-    std::shared_ptr<MWWorld::Action> Probe::use (const MWWorld::Ptr& ptr) const
+    std::shared_ptr<MWWorld::Action> Probe::use (const MWWorld::Ptr& ptr, bool force) const
     {
-        std::shared_ptr<MWWorld::Action> action(new MWWorld::ActionEquip(ptr));
+        std::shared_ptr<MWWorld::Action> action(new MWWorld::ActionEquip(ptr, force));
 
         action->setSound(getUpSoundId(ptr));
 

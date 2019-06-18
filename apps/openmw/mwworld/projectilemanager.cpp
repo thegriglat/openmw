@@ -1,13 +1,15 @@
 #include "projectilemanager.hpp"
 
 #include <iomanip>
-#include <iostream>
 
 #include <osg/PositionAttitudeTransform>
-#include <osg/ComputeBoundsVisitor>
+
+#include <components/debug/debuglog.hpp>
 
 #include <components/esm/esmwriter.hpp>
 #include <components/esm/projectilestate.hpp>
+
+#include <components/misc/constants.hpp>
 
 #include <components/resource/resourcesystem.hpp>
 #include <components/resource/scenemanager.hpp>
@@ -31,7 +33,6 @@
 #include "../mwmechanics/actorutil.hpp"
 #include "../mwmechanics/aipackage.hpp"
 
-#include "../mwrender/effectmanager.hpp"
 #include "../mwrender/animation.hpp"
 #include "../mwrender/vismask.hpp"
 #include "../mwrender/renderingmanager.hpp"
@@ -43,7 +44,7 @@
 
 namespace
 {
-    ESM::EffectList getMagicBoltData(std::vector<std::string>& projectileIDs, std::vector<std::string>& sounds, float& speed, std::string& texture, std::string& sourceName, const std::string& id)
+    ESM::EffectList getMagicBoltData(std::vector<std::string>& projectileIDs, std::set<std::string>& sounds, float& speed, std::string& texture, std::string& sourceName, const std::string& id)
     {
         const MWWorld::ESMStore& esmStore = MWBase::Environment::get().getWorld()->getStore();
         const ESM::EffectList* effects;
@@ -87,9 +88,9 @@ namespace
                 "alteration", "conjuration", "destruction", "illusion", "mysticism", "restoration"
             };
             if (!magicEffect->mBoltSound.empty())
-                sounds.push_back(magicEffect->mBoltSound);
+                sounds.emplace(magicEffect->mBoltSound);
             else
-                sounds.push_back(schools[magicEffect->mData.mSchool] + " bolt");
+                sounds.emplace(schools[magicEffect->mData.mSchool] + " bolt");
             projectileEffects.mList.push_back(*iter);
         }
         
@@ -106,11 +107,10 @@ namespace
         
         if (projectileEffects.mList.size() > 1) // insert a VFX_Multiple projectile if there are multiple projectile effects
         {
-            std::ostringstream ID;
-            ID << "VFX_Multiple" << effects->mList.size();
+            const std::string ID = "VFX_Multiple" + std::to_string(effects->mList.size());
             std::vector<std::string>::iterator it;
             it = projectileIDs.begin();
-            it = projectileIDs.insert(it, ID.str());
+            it = projectileIDs.insert(it, ID);
         }
         return projectileEffects;
     }
@@ -202,12 +202,6 @@ namespace MWWorld
         }
 
         osg::ref_ptr<osg::Node> projectile = mResourceSystem->getSceneManager()->getInstance(model, attachTo);
-
-        osg::ref_ptr<osg::ComputeBoundsVisitor> boundVisitor = new osg::ComputeBoundsVisitor();
-        projectile->accept(*boundVisitor.get());
-        osg::BoundingBox bb = boundVisitor->getBoundingBox();
-
-        state.mNode->setPivotPoint(bb.center()); 
 
         if (state.mIdMagic.size() > 1)
             for (size_t iter = 1; iter != state.mIdMagic.size(); ++iter)
@@ -303,9 +297,9 @@ namespace MWWorld
         createModel(state, ptr.getClass().getModel(ptr), pos, orient, true, true, lightDiffuseColor, texture);
 
         MWBase::SoundManager *sndMgr = MWBase::Environment::get().getSoundManager();
-        for (size_t it = 0; it != state.mSoundIds.size(); it++)
+        for (const std::string &soundid : state.mSoundIds)
         {
-            MWBase::Sound *sound = sndMgr->playSound3D(pos, state.mSoundIds.at(it), 1.0f, 1.0f,
+            MWBase::Sound *sound = sndMgr->playSound3D(pos, soundid, 1.0f, 1.0f,
                                                        MWSound::Type::Sfx, MWSound::PlayMode::Loop);
             if (sound)
                 state.mSounds.push_back(sound);
@@ -384,7 +378,7 @@ namespace MWWorld
         {
             osg::Quat orient = it->mNode->getAttitude();
             static float fTargetSpellMaxSpeed = MWBase::Environment::get().getWorld()->getStore().get<ESM::GameSetting>()
-                        .find("fTargetSpellMaxSpeed")->getFloat();
+                        .find("fTargetSpellMaxSpeed")->mValue.getFloat();
             float speed = fTargetSpellMaxSpeed * it->mSpeed;
             osg::Vec3f direction = orient * osg::Vec3f(0,1,0);
             direction.normalize();
@@ -459,29 +453,19 @@ namespace MWWorld
         {
             // gravity constant - must be way lower than the gravity affecting actors, since we're not
             // simulating aerodynamics at all
-            it->mVelocity -= osg::Vec3f(0, 0, 627.2f * 0.1f) * duration;
+            it->mVelocity -= osg::Vec3f(0, 0, Constants::GravityConst * Constants::UnitsPerMeter * 0.1f) * duration;
 
             osg::Vec3f pos(it->mNode->getPosition());
             osg::Vec3f newPos = pos + it->mVelocity * duration;
 
-            osg::Quat orient;
-
-            if (it->mThrown)            
-                orient.set(
-                    osg::Matrixd::rotate(it->mEffectAnimationTime->getTime() * -10.0,osg::Vec3f(0,0,1)) *
-                    osg::Matrixd::rotate(osg::PI / 2.0,osg::Vec3f(0,1,0)) *
-                    osg::Matrixd::rotate(-1 * osg::PI / 2.0,osg::Vec3f(1,0,0)) *
-                    osg::Matrixd::inverse(
-                        osg::Matrixd::lookAt(
-                            osg::Vec3f(0,0,0),
-                            it->mVelocity,
-                            osg::Vec3f(0,0,1))
-                        )
-                    );
-            else
+            // rotation does not work well for throwing projectiles - their roll angle will depend on shooting direction.
+            if (!it->mThrown)
+            {
+                osg::Quat orient;
                 orient.makeRotate(osg::Vec3f(0,1,0), it->mVelocity);
+                it->mNode->setAttitude(orient);
+            }
 
-            it->mNode->setAttitude(orient);
             it->mNode->setPosition(newPos);
 
             update(*it, duration);
@@ -647,7 +631,7 @@ namespace MWWorld
             }
             catch(...)
             {
-                std::cerr << "Warning: Failed to recreate magic projectile from saved data (id \"" << state.mSpellId << "\" no longer exists?)" << std::endl;
+                Log(Debug::Warning) << "Warning: Failed to recreate magic projectile from saved data (id \"" << state.mSpellId << "\" no longer exists?)";
                 return true;
             }
 
@@ -672,9 +656,9 @@ namespace MWWorld
             createModel(state, model, osg::Vec3f(esm.mPosition), osg::Quat(esm.mOrientation), true, true, lightDiffuseColor, texture);
 
             MWBase::SoundManager *sndMgr = MWBase::Environment::get().getSoundManager();
-            for (size_t soundIter = 0; soundIter != state.mSoundIds.size(); soundIter++)
+            for (const std::string &soundid : state.mSoundIds)
             {
-                MWBase::Sound *sound = sndMgr->playSound3D(esm.mPosition, state.mSoundIds.at(soundIter), 1.0f, 1.0f,
+                MWBase::Sound *sound = sndMgr->playSound3D(esm.mPosition, soundid, 1.0f, 1.0f,
                                                            MWSound::Type::Sfx, MWSound::PlayMode::Loop);
                 if (sound)
                     state.mSounds.push_back(sound);

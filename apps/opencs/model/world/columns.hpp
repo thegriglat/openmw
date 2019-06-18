@@ -99,7 +99,7 @@ namespace CSMWorld
             ColumnId_Respawn = 84,
             ColumnId_CreatureType = 85,
             ColumnId_SoulPoints = 86,
-            ColumnId_OriginalCreature = 87,
+            ColumnId_ParentCreature = 87,
             ColumnId_Biped = 88,
             ColumnId_HasWeapon = 89,
             // unused
@@ -338,6 +338,14 @@ namespace CSMWorld
             ColumnId_LandColoursIndex = 304,
             ColumnId_LandTexturesIndex = 305,
 
+            ColumnId_RankName = 306,
+            ColumnId_FactionRanks = 307,
+            ColumnId_FactionPrimSkill = 308,
+            ColumnId_FactionFavSkill = 309,
+            ColumnId_FactionRep = 310,
+            ColumnId_FactionAttrib1 = 311,
+            ColumnId_FactionAttrib2 = 312,
+
             // Allocated to a separate value range, so we don't get a collision should we ever need
             // to extend the number of use values.
             ColumnId_UseValue1 = 0x10000,
@@ -382,7 +390,7 @@ namespace CSMWorld
 
         bool hasEnums (ColumnId column);
 
-        std::vector<std::string> getEnums (ColumnId column);
+        std::vector<std::pair<int,std::string>> getEnums (ColumnId column);
         ///< Returns an empty vector, if \a column isn't an enum type column.
     }
 }

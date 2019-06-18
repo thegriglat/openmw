@@ -1,6 +1,6 @@
 #include "loadcrea.hpp"
 
-#include <iostream>
+#include <components/debug/debuglog.hpp>
 
 #include "esmreader.hpp"
 #include "esmwriter.hpp"
@@ -22,7 +22,9 @@ namespace ESM {
         mTransport.mList.clear();
 
         mScale = 1.f;
-        mHasAI = false;
+        mAiData.blank();
+        mAiData.mFight = 90;
+        mAiData.mFlee = 20;
 
         bool hasName = false;
         bool hasNpdt = false;
@@ -53,7 +55,10 @@ namespace ESM {
                     hasNpdt = true;
                     break;
                 case ESM::FourCC<'F','L','A','G'>::value:
-                    esm.getHT(mFlags);
+                    int flags;
+                    esm.getHT(flags);
+                    mFlags = flags & 0xFF;
+                    mBloodType = ((flags >> 8) & 0xFF) >> 2;
                     hasFlags = true;
                     break;
                 case ESM::FourCC<'X','S','C','L'>::value:
@@ -67,7 +72,6 @@ namespace ESM {
                     break;
                 case ESM::FourCC<'A','I','D','T'>::value:
                     esm.getHExact(&mAiData, sizeof(mAiData));
-                    mHasAI = true;
                     break;
                 case ESM::FourCC<'D','O','D','T'>::value:
                 case ESM::FourCC<'D','N','A','M'>::value:
@@ -89,7 +93,7 @@ namespace ESM {
                     // seems to occur only in .ESS files, unsure of purpose
                     int index;
                     esm.getHT(index);
-                    std::cerr << "Creature::load: Unhandled INDX " << index << std::endl;
+                    Log(Debug::Warning) << "Creature::load: Unhandled INDX " << index;
                     break;
                 default:
                     esm.fail("Unknown subrecord");
@@ -120,21 +124,14 @@ namespace ESM {
         esm.writeHNOCString("FNAM", mName);
         esm.writeHNOCString("SCRI", mScript);
         esm.writeHNT("NPDT", mData, 96);
-        esm.writeHNT("FLAG", mFlags);
+        esm.writeHNT("FLAG", ((mBloodType << 10) + mFlags));
         if (mScale != 1.0) {
             esm.writeHNT("XSCL", mScale);
         }
 
         mInventory.save(esm);
         mSpells.save(esm);
-        if (mAiData.mHello != 0
-            || mAiData.mFight != 0
-            || mAiData.mFlee != 0
-            || mAiData.mAlarm != 0
-            || mAiData.mServices != 0)
-        {
-            esm.writeHNT("AIDT", mAiData, sizeof(mAiData));
-        }
+        esm.writeHNT("AIDT", mAiData, sizeof(mAiData));
         mTransport.save(esm);
         mAiPackage.save(esm);
     }
@@ -150,6 +147,7 @@ namespace ESM {
         mData.mCombat = mData.mMagic = mData.mStealth = 0;
         for (int i=0; i<6; ++i) mData.mAttack[i] = 0;
         mData.mGold = 0;
+        mBloodType = 0;
         mFlags = 0;
         mScale = 1.f;
         mModel.clear();
@@ -158,9 +156,9 @@ namespace ESM {
         mOriginal.clear();
         mInventory.mList.clear();
         mSpells.mList.clear();
-        mHasAI = false;
         mAiData.blank();
-        mAiData.mServices = 0;
+        mAiData.mFight = 90;
+        mAiData.mFlee = 20;
         mAiPackage.mList.clear();
         mTransport.mList.clear();
     }

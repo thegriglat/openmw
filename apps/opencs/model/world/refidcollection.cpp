@@ -128,13 +128,13 @@ CSMWorld::RefIdCollection::RefIdCollection()
 
     ActorColumns actorsColumns (nameColumns);
 
-    mColumns.push_back (RefIdColumn (Columns::ColumnId_AiHello, ColumnBase::Display_Integer));
+    mColumns.push_back (RefIdColumn (Columns::ColumnId_AiHello, ColumnBase::Display_UnsignedInteger16));
     actorsColumns.mHello = &mColumns.back();
-    mColumns.push_back (RefIdColumn (Columns::ColumnId_AiFlee, ColumnBase::Display_Integer));
+    mColumns.push_back (RefIdColumn (Columns::ColumnId_AiFlee, ColumnBase::Display_UnsignedInteger8));
     actorsColumns.mFlee = &mColumns.back();
-    mColumns.push_back (RefIdColumn (Columns::ColumnId_AiFight, ColumnBase::Display_Integer));
+    mColumns.push_back (RefIdColumn (Columns::ColumnId_AiFight, ColumnBase::Display_UnsignedInteger8));
     actorsColumns.mFight = &mColumns.back();
-    mColumns.push_back (RefIdColumn (Columns::ColumnId_AiAlarm, ColumnBase::Display_Integer));
+    mColumns.push_back (RefIdColumn (Columns::ColumnId_AiAlarm, ColumnBase::Display_UnsignedInteger8));
     actorsColumns.mAlarm = &mColumns.back();
 
     // Nested table
@@ -184,11 +184,11 @@ CSMWorld::RefIdCollection::RefIdCollection()
     mColumns.back().addColumn(
             new RefIdColumn (Columns::ColumnId_PosZ, CSMWorld::ColumnBase::Display_Float));
     mColumns.back().addColumn(
-            new RefIdColumn (Columns::ColumnId_RotX, CSMWorld::ColumnBase::Display_Float));
+            new RefIdColumn (Columns::ColumnId_RotX, CSMWorld::ColumnBase::Display_Double));
     mColumns.back().addColumn(
-            new RefIdColumn (Columns::ColumnId_RotY, CSMWorld::ColumnBase::Display_Float));
+            new RefIdColumn (Columns::ColumnId_RotY, CSMWorld::ColumnBase::Display_Double));
     mColumns.back().addColumn(
-            new RefIdColumn (Columns::ColumnId_RotZ, CSMWorld::ColumnBase::Display_Float));
+            new RefIdColumn (Columns::ColumnId_RotZ, CSMWorld::ColumnBase::Display_Double));
 
     // Nested table
     mColumns.push_back(RefIdColumn (Columns::ColumnId_AiPackageList,
@@ -331,7 +331,7 @@ CSMWorld::RefIdCollection::RefIdCollection()
     creatureColumns.mType = &mColumns.back();
     mColumns.push_back (RefIdColumn (Columns::ColumnId_Scale, ColumnBase::Display_Float));
     creatureColumns.mScale = &mColumns.back();
-    mColumns.push_back (RefIdColumn (Columns::ColumnId_OriginalCreature, ColumnBase::Display_Creature));
+    mColumns.push_back (RefIdColumn (Columns::ColumnId_ParentCreature, ColumnBase::Display_Creature));
     creatureColumns.mOriginal = &mColumns.back();
 
     static const struct
@@ -437,7 +437,7 @@ CSMWorld::RefIdCollection::RefIdCollection()
     mColumns.push_back (RefIdColumn (Columns::ColumnId_Radius, ColumnBase::Display_Integer));
     lightColumns.mRadius = &mColumns.back();
 
-    mColumns.push_back (RefIdColumn (Columns::ColumnId_Colour, ColumnBase::Display_Integer));
+    mColumns.push_back (RefIdColumn (Columns::ColumnId_Colour, ColumnBase::Display_Colour));
     lightColumns.mColor = &mColumns.back();
 
     mColumns.push_back (RefIdColumn (Columns::ColumnId_Sound, ColumnBase::Display_Sound));
@@ -512,7 +512,7 @@ CSMWorld::RefIdCollection::RefIdCollection()
     mColumns.back().addColumn(
             new RefIdColumn (Columns::ColumnId_Attribute, CSMWorld::ColumnBase::Display_Attribute, false, false));
     mColumns.back().addColumn(
-            new RefIdColumn (Columns::ColumnId_UChar, CSMWorld::ColumnBase::Display_Integer));
+            new RefIdColumn (Columns::ColumnId_UChar, CSMWorld::ColumnBase::Display_UnsignedInteger8));
 
     // Nested table
     mColumns.push_back(RefIdColumn (Columns::ColumnId_NpcSkills,
@@ -524,7 +524,7 @@ CSMWorld::RefIdCollection::RefIdCollection()
     mColumns.back().addColumn(
             new RefIdColumn (Columns::ColumnId_Skill, CSMWorld::ColumnBase::Display_SkillId, false, false));
     mColumns.back().addColumn(
-            new RefIdColumn (Columns::ColumnId_UChar, CSMWorld::ColumnBase::Display_Integer));
+            new RefIdColumn (Columns::ColumnId_UChar, CSMWorld::ColumnBase::Display_UnsignedInteger8));
 
     // Nested list
     mColumns.push_back(RefIdColumn (Columns::ColumnId_NpcMisc,
@@ -534,21 +534,21 @@ CSMWorld::RefIdCollection::RefIdCollection()
     miscMap.insert(std::make_pair(UniversalId::Type_Npc, new NpcMiscRefIdAdapter()));
     mNestedAdapters.push_back (std::make_pair(&mColumns.back(), miscMap));
     mColumns.back().addColumn(
-            new RefIdColumn (Columns::ColumnId_Level, CSMWorld::ColumnBase::Display_Integer));
+            new RefIdColumn (Columns::ColumnId_Level, CSMWorld::ColumnBase::Display_SignedInteger16));
     mColumns.back().addColumn(
-            new RefIdColumn (Columns::ColumnId_NpcFactionID, CSMWorld::ColumnBase::Display_Integer));
+            new RefIdColumn (Columns::ColumnId_NpcFactionID, CSMWorld::ColumnBase::Display_SignedInteger8));
     mColumns.back().addColumn(
-            new RefIdColumn (Columns::ColumnId_Health, CSMWorld::ColumnBase::Display_Integer));
+            new RefIdColumn (Columns::ColumnId_Health, CSMWorld::ColumnBase::Display_UnsignedInteger16));
     mColumns.back().addColumn(
-            new RefIdColumn (Columns::ColumnId_Mana, CSMWorld::ColumnBase::Display_Integer));
+            new RefIdColumn (Columns::ColumnId_Mana, CSMWorld::ColumnBase::Display_UnsignedInteger16));
     mColumns.back().addColumn(
-            new RefIdColumn (Columns::ColumnId_Fatigue, CSMWorld::ColumnBase::Display_Integer));
+            new RefIdColumn (Columns::ColumnId_Fatigue, CSMWorld::ColumnBase::Display_UnsignedInteger16));
     mColumns.back().addColumn(
-            new RefIdColumn (Columns::ColumnId_NpcDisposition, CSMWorld::ColumnBase::Display_Integer));
+            new RefIdColumn (Columns::ColumnId_NpcDisposition, CSMWorld::ColumnBase::Display_UnsignedInteger8));
     mColumns.back().addColumn(
-            new RefIdColumn (Columns::ColumnId_NpcReputation, CSMWorld::ColumnBase::Display_Integer));
+            new RefIdColumn (Columns::ColumnId_NpcReputation, CSMWorld::ColumnBase::Display_UnsignedInteger8));
     mColumns.back().addColumn(
-            new RefIdColumn (Columns::ColumnId_NpcRank, CSMWorld::ColumnBase::Display_Integer));
+            new RefIdColumn (Columns::ColumnId_NpcRank, CSMWorld::ColumnBase::Display_UnsignedInteger8));
     mColumns.back().addColumn(
             new RefIdColumn (Columns::ColumnId_Gold, CSMWorld::ColumnBase::Display_Integer));
     mColumns.back().addColumn(
@@ -645,7 +645,7 @@ CSMWorld::RefIdCollection::RefIdCollection()
     mColumns.back().addColumn(
         new RefIdColumn (Columns::ColumnId_LevelledItemType, CSMWorld::ColumnBase::Display_Boolean));
     mColumns.back().addColumn(
-        new RefIdColumn (Columns::ColumnId_LevelledItemChanceNone, CSMWorld::ColumnBase::Display_Integer));
+        new RefIdColumn (Columns::ColumnId_LevelledItemChanceNone, CSMWorld::ColumnBase::Display_UnsignedInteger8));
 
     mAdapters.insert (std::make_pair (UniversalId::Type_Activator,
         new NameRefIdAdapter<ESM::Activator> (UniversalId::Type_Activator, nameColumns)));

@@ -6,6 +6,7 @@
 
 #include <osg/Texture2D>
 
+#include <components/debug/debuglog.hpp>
 #include <components/myguiplatform/myguitexture.hpp>
 
 #include "../mwworld/esmstore.hpp"
@@ -128,10 +129,10 @@ namespace MWGui
         updateSkills();
         updateSpellPowers();
 
-        mPreviewImage->setRenderItemTexture(NULL);
+        mPreviewImage->setRenderItemTexture(nullptr);
 
-        mPreview.reset(NULL);
-        mPreviewTexture.reset(NULL);
+        mPreview.reset(nullptr);
+        mPreviewTexture.reset(nullptr);
 
         mPreview.reset(new MWRender::RaceSelectionPreview(mParent, mResourceSystem));
         mPreview->rebuild();
@@ -189,10 +190,10 @@ namespace MWGui
     {
         WindowModal::onClose();
 
-        mPreviewImage->setRenderItemTexture(NULL);
+        mPreviewImage->setRenderItemTexture(nullptr);
 
-        mPreviewTexture.reset(NULL);
-        mPreview.reset(NULL);
+        mPreviewTexture.reset(nullptr);
+        mPreview.reset(nullptr);
     }
 
     // widget controls
@@ -211,7 +212,7 @@ namespace MWGui
 
     void RaceDialog::onHeadRotate(MyGUI::ScrollBar* scroll, size_t _position)
     {
-        float angle = (float(_position) / (scroll->getScrollRange()-1) - 0.5f) * 3.14f * 2;
+        float angle = (float(_position) / (scroll->getScrollRange()-1) - 0.5f) * osg::PI * 2;
         mPreview->setAngle (angle);
 
         mCurrentAngle = angle;
@@ -289,9 +290,8 @@ namespace MWGui
         const MWWorld::Store<ESM::BodyPart> &store =
             MWBase::Environment::get().getWorld()->getStore().get<ESM::BodyPart>();
 
-        for (MWWorld::Store<ESM::BodyPart>::iterator it = store.begin(); it != store.end(); ++it)
+        for (const ESM::BodyPart& bodypart : store)
         {
-            const ESM::BodyPart& bodypart = *it;
             if (bodypart.mData.mFlags & ESM::BodyPart::BPF_NotPlayable)
                 continue;
             if (bodypart.mData.mType != ESM::BodyPart::MT_Skin)
@@ -340,7 +340,7 @@ namespace MWGui
         }
         catch (std::exception& e)
         {
-            std::cerr << "Error creating preview: " << e.what() << std::endl;
+            Log(Debug::Error) << "Error creating preview: " << e.what();
         }
     }
 
@@ -352,22 +352,21 @@ namespace MWGui
             MWBase::Environment::get().getWorld()->getStore().get<ESM::Race>();
 
         std::vector<std::pair<std::string, std::string> > items; // ID, name
-        MWWorld::Store<ESM::Race>::iterator it = races.begin();
-        for (; it != races.end(); ++it)
+        for (const ESM::Race& race : races)
         {
-            bool playable = it->mData.mFlags & ESM::Race::Playable;
+            bool playable = race.mData.mFlags & ESM::Race::Playable;
             if (!playable) // Only display playable races
                 continue;
 
-            items.push_back(std::make_pair(it->mId, it->mName));
+            items.push_back(std::make_pair(race.mId, race.mName));
         }
         std::sort(items.begin(), items.end(), sortRaces);
 
         int index = 0;
-        for (std::vector<std::pair<std::string, std::string> >::const_iterator iter = items.begin(); iter != items.end(); ++iter)
+        for (auto& item : items)
         {
-            mRaceList->addItem(iter->second, iter->first);
-            if (Misc::StringUtils::ciEqual(iter->first, mCurrentRaceId))
+            mRaceList->addItem(item.second, item.first);
+            if (Misc::StringUtils::ciEqual(item.first, mCurrentRaceId))
                 mRaceList->setIndexSelected(index);
             ++index;
         }
@@ -375,9 +374,9 @@ namespace MWGui
 
     void RaceDialog::updateSkills()
     {
-        for (std::vector<MyGUI::Widget*>::iterator it = mSkillItems.begin(); it != mSkillItems.end(); ++it)
+        for (MyGUI::Widget* widget : mSkillItems)
         {
-            MyGUI::Gui::getInstance().destroyWidget(*it);
+            MyGUI::Gui::getInstance().destroyWidget(widget);
         }
         mSkillItems.clear();
 
@@ -412,9 +411,9 @@ namespace MWGui
 
     void RaceDialog::updateSpellPowers()
     {
-        for (std::vector<MyGUI::Widget*>::iterator it = mSpellPowerItems.begin(); it != mSpellPowerItems.end(); ++it)
+        for (MyGUI::Widget* widget : mSpellPowerItems)
         {
-            MyGUI::Gui::getInstance().destroyWidget(*it);
+            MyGUI::Gui::getInstance().destroyWidget(widget);
         }
         mSpellPowerItems.clear();
 
@@ -427,11 +426,9 @@ namespace MWGui
         const MWWorld::ESMStore &store = MWBase::Environment::get().getWorld()->getStore();
         const ESM::Race *race = store.get<ESM::Race>().find(mCurrentRaceId);
 
-        std::vector<std::string>::const_iterator it = race->mPowers.mList.begin();
-        std::vector<std::string>::const_iterator end = race->mPowers.mList.end();
-        for (int i = 0; it != end; ++it)
+        int i = 0;
+        for (const std::string& spellpower : race->mPowers.mList)
         {
-            const std::string &spellpower = *it;
             Widgets::MWSpellPtr spellPowerWidget = mSpellPowerList->createWidget<Widgets::MWSpell>("MW_StatName", coord, MyGUI::Align::Default, std::string("SpellPower") + MyGUI::utility::toString(i));
             spellPowerWidget->setSpellId(spellpower);
             spellPowerWidget->setUserString("ToolTipType", "Spell");

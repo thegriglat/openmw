@@ -22,6 +22,7 @@ namespace MWGui
             : imageSize(32)
             , remainingEnchantCharge(-1)
             , isPotion(false)
+            , isIngredient(false)
             , wordWrap(true)
         {}
 
@@ -41,6 +42,7 @@ namespace MWGui
         std::vector<std::string> notes;
 
         bool isPotion; // potions do not show target in the tooltip
+        bool isIngredient; // ingredients have no effect magnitude
         bool wordWrap;
     };
 
@@ -58,6 +60,8 @@ namespace MWGui
         bool getFullHelp() const;
 
         void setDelay(float delay);
+
+        void clear();
 
         void setFocusObject(const MWWorld::Ptr& focus);
         void setFocusObjectScreenCoords(float min_x, float min_y, float max_x, float max_y);

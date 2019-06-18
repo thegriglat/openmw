@@ -472,8 +472,8 @@ bool Wizard::UnshieldWorker::setupComponent(Component component)
 
                 if (morrowindFound) {
                     // Check if we have correct archive, other archives have Morrowind.bsa too
-                    if ((tribunalFound && bloodmoonFound)
-                            || (!tribunalFound && !bloodmoonFound)) {
+                    if (tribunalFound == bloodmoonFound)
+                    {
                         cabFile = file;
                         found = true; // We have a GoTY disk or a Morrowind-only disk
                     }
@@ -856,7 +856,7 @@ QStringList Wizard::UnshieldWorker::findFiles(const QString &fileName, const QSt
         if (info.isDir()) {
             if (directories)
             {
-                if (info.fileName() == fileName) {
+                if (!info.fileName().compare(fileName, Qt::CaseInsensitive)) {
                     result.append(info.absoluteFilePath());
                 } else {
                     if (recursive)
@@ -872,11 +872,11 @@ QStringList Wizard::UnshieldWorker::findFiles(const QString &fileName, const QSt
 
             switch (flags) {
             case Qt::MatchExactly:
-                if (info.fileName() == fileName)
+                if (!info.fileName().compare(fileName, Qt::CaseInsensitive))
                     result.append(info.absoluteFilePath());
                 break;
             case Qt::MatchEndsWith:
-                if (info.fileName().endsWith(fileName))
+                if (info.fileName().endsWith(fileName, Qt::CaseInsensitive))
                     result.append(info.absoluteFilePath());
                 break;
             }

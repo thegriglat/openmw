@@ -7,11 +7,9 @@
 #include "../mwbase/windowmanager.hpp"
 
 #include "../mwworld/ptr.hpp"
-#include "../mwworld/actiontake.hpp"
 #include "../mwworld/actionapply.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/esmstore.hpp"
-#include "../mwworld/containerstore.hpp"
 #include "../mwphysics/physicssystem.hpp"
 #include "../mwworld/nullaction.hpp"
 
@@ -139,7 +137,7 @@ namespace MWClass
         return info;
     }
 
-    std::shared_ptr<MWWorld::Action> Potion::use (const MWWorld::Ptr& ptr) const
+    std::shared_ptr<MWWorld::Action> Potion::use (const MWWorld::Ptr& ptr, bool force) const
     {
         MWWorld::LiveCellRef<ESM::Potion> *ref =
             ptr.get<ESM::Potion>();

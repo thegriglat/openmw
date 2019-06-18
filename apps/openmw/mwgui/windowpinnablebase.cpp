@@ -1,7 +1,5 @@
 #include "windowpinnablebase.hpp"
 
-#include <MyGUI_Button.h>
-
 #include "exposedwindow.hpp"
 
 namespace MWGui
@@ -9,21 +7,10 @@ namespace MWGui
     WindowPinnableBase::WindowPinnableBase(const std::string& parLayout)
       : WindowBase(parLayout), mPinned(false)
     {
-        ExposedWindow* window = mMainWidget->castType<ExposedWindow>();
+        Window* window = mMainWidget->castType<Window>();
         mPinButton = window->getSkinWidget ("Button");
 
         mPinButton->eventMouseButtonPressed += MyGUI::newDelegate(this, &WindowPinnableBase::onPinButtonPressed);
-
-        MyGUI::Button* button = NULL;
-        MyGUI::VectorWidgetPtr widgets = window->getSkinWidgetsByName("Action");
-        for (MyGUI::VectorWidgetPtr::iterator it = widgets.begin(); it != widgets.end(); ++it)
-        {
-            if ((*it)->isUserString("HideWindowOnDoubleClick"))
-                button = (*it)->castType<MyGUI::Button>();
-        }
-
-        if (button)
-            button->eventMouseButtonDoubleClick += MyGUI::newDelegate(this, &WindowPinnableBase::onDoubleClick);
     }
 
     void WindowPinnableBase::onPinButtonPressed(MyGUI::Widget* _sender, int left, int top, MyGUI::MouseButton id)
@@ -39,11 +26,6 @@ namespace MWGui
             mPinButton->changeWidgetSkin ("PinUp");
 
         onPinToggled();
-    }
-
-    void WindowPinnableBase::onDoubleClick(MyGUI::Widget *_sender)
-    {
-        onTitleDoubleClicked();
     }
 
     void WindowPinnableBase::setPinned(bool pinned)

@@ -1,5 +1,6 @@
 #include "inventorywindow.hpp"
 
+#include <cmath>
 #include <stdexcept>
 
 #include <MyGUI_Window.h>
@@ -24,7 +25,7 @@
 
 #include "../mwworld/inventorystore.hpp"
 #include "../mwworld/class.hpp"
-#include "../mwworld/action.hpp"
+#include "../mwworld/actionequip.hpp"
 #include "../mwscript/interpretercontext.hpp"
 
 #include "../mwmechanics/actorutil.hpp"
@@ -59,14 +60,20 @@ namespace MWGui
         : WindowPinnableBase("openmw_inventory_window.layout")
         , mDragAndDrop(dragAndDrop)
         , mSelectedItem(-1)
-        , mSortModel(NULL)
-        , mTradeModel(NULL)
+        , mSortModel(nullptr)
+        , mTradeModel(nullptr)
         , mGuiMode(GM_Inventory)
         , mLastXSize(0)
         , mLastYSize(0)
         , mPreview(new MWRender::InventoryPreview(parent, resourceSystem, MWMechanics::getPlayer()))
         , mTrading(false)
+        , mScaleFactor(1.0f)
+        , mUpdateTimer(0.f)
     {
+        float uiScale = Settings::Manager::getFloat("scaling factor", "GUI");
+        if (uiScale > 1.0)
+            mScaleFactor = uiScale;
+
         mPreviewTexture.reset(new osgMyGUI::OSGTexture(mPreview->getTexture()));
         mPreview->rebuild();
 
@@ -128,6 +135,12 @@ namespace MWGui
 
         mItemView->setModel(mSortModel);
 
+        mFilterAll->setStateSelected(true);
+        mFilterWeapon->setStateSelected(false);
+        mFilterApparel->setStateSelected(false);
+        mFilterMagic->setStateSelected(false);
+        mFilterMisc->setStateSelected(false);
+
         mPreview->updatePtr(mPtr);
         mPreview->rebuild();
         mPreview->update();
@@ -144,33 +157,44 @@ namespace MWGui
     void InventoryWindow::clear()
     {
         mPtr = MWWorld::Ptr();
-        mTradeModel = NULL;
-        mSortModel = NULL;
-        mItemView->setModel(NULL);
+        mTradeModel = nullptr;
+        mSortModel = nullptr;
+        mItemView->setModel(nullptr);
+    }
+
+    void InventoryWindow::toggleMaximized()
+    {
+        std::string setting = getModeSetting();
+
+        bool maximized = !Settings::Manager::getBool(setting + " maximized", "Windows");
+        if (maximized)
+            setting += " maximized";
+
+        MyGUI::IntSize viewSize = MyGUI::RenderManager::getInstance().getViewSize();
+        float x = Settings::Manager::getFloat(setting + " x", "Windows") * float(viewSize.width);
+        float y = Settings::Manager::getFloat(setting + " y", "Windows") * float(viewSize.height);
+        float w = Settings::Manager::getFloat(setting + " w", "Windows") * float(viewSize.width);
+        float h = Settings::Manager::getFloat(setting + " h", "Windows") * float(viewSize.height);
+        MyGUI::Window* window = mMainWidget->castType<MyGUI::Window>();
+        window->setCoord(x, y, w, h);
+
+        if (maximized)
+            Settings::Manager::setBool(setting, "Windows", maximized);
+        else
+            Settings::Manager::setBool(setting + " maximized", "Windows", maximized);
+
+        adjustPanes();
+        updatePreviewSize();
     }
 
     void InventoryWindow::setGuiMode(GuiMode mode)
     {
-        std::string setting = "inventory";
         mGuiMode = mode;
-        switch(mode) {
-            case GM_Container:
-                setPinButtonVisible(false);
-                setting += " container";
-                break;
-            case GM_Companion:
-                setPinButtonVisible(false);
-                setting += " companion";
-                break;
-            case GM_Barter:
-                setPinButtonVisible(false);
-                setting += " barter";
-                break;
-            case GM_Inventory:
-            default:
-                setPinButtonVisible(true);
-                break;
-        }
+        std::string setting = getModeSetting();
+        setPinButtonVisible(mode == GM_Inventory);
+
+        if (Settings::Manager::getBool(setting + " maximized", "Windows"))
+            setting += " maximized";
 
         MyGUI::IntSize viewSize = MyGUI::RenderManager::getInstance().getViewSize();
         MyGUI::IntPoint pos(static_cast<int>(Settings::Manager::getFloat(setting + " x", "Windows") * viewSize.width),
@@ -283,9 +307,9 @@ namespace MWGui
         {
             mSelectedItem = index;
             if (mTrading)
-                sellItem (NULL, count);
+                sellItem (nullptr, count);
             else
-                dragItem (NULL, count);
+                dragItem (nullptr, count);
         }
     }
 
@@ -373,11 +397,11 @@ namespace MWGui
         adjustPanes();
     }
 
-    void InventoryWindow::onWindowResize(MyGUI::Window* _sender)
+    std::string InventoryWindow::getModeSetting() const
     {
-        adjustPanes();
         std::string setting = "inventory";
-        switch(mGuiMode) {
+        switch(mGuiMode)
+        {
             case GM_Container:
                 setting += " container";
                 break;
@@ -391,6 +415,14 @@ namespace MWGui
                 break;
         }
 
+        return setting;
+    }
+
+    void InventoryWindow::onWindowResize(MyGUI::Window* _sender)
+    {
+        adjustPanes();
+        std::string setting = getModeSetting();
+
         MyGUI::IntSize viewSize = MyGUI::RenderManager::getInstance().getViewSize();
         float x = _sender->getPosition().left / float(viewSize.width);
         float y = _sender->getPosition().top / float(viewSize.height);
@@ -400,6 +432,9 @@ namespace MWGui
         Settings::Manager::setFloat(setting + " y", "Windows", y);
         Settings::Manager::setFloat(setting + " w", "Windows", w);
         Settings::Manager::setFloat(setting + " h", "Windows", h);
+        bool maximized = Settings::Manager::getBool(setting + " maximized", "Windows");
+        if (maximized)
+            Settings::Manager::setBool(setting + " maximized", "Windows", false);
 
         if (mMainWidget->getSize().width != mLastXSize || mMainWidget->getSize().height != mLastYSize)
         {
@@ -424,10 +459,10 @@ namespace MWGui
         MyGUI::IntSize size = mAvatarImage->getSize();
         int width = std::min(mPreview->getTextureWidth(), size.width);
         int height = std::min(mPreview->getTextureHeight(), size.height);
-        mPreview->setViewport(width, height);
+        mPreview->setViewport(int(width*mScaleFactor), int(height*mScaleFactor));
 
         mAvatarImage->getSubWidgetMain()->_setUVSet(MyGUI::FloatRect(0.f, 0.f,
-                                                                     width/float(mPreview->getTextureWidth()), height/float(mPreview->getTextureHeight())));
+                                                                     width*mScaleFactor/float(mPreview->getTextureWidth()), height*mScaleFactor/float(mPreview->getTextureHeight())));
     }
 
     void InventoryWindow::onFilterChanged(MyGUI::Widget* _sender)
@@ -463,11 +498,13 @@ namespace MWGui
 
     void InventoryWindow::onTitleDoubleClicked()
     {
-        if (!mPinned)
+        if (MyGUI::InputManager::getInstance().isShiftPressed())
+            toggleMaximized();
+        else if (!mPinned)
             MWBase::Environment::get().getWindowManager()->toggleVisible(GW_Inventory);
     }
 
-    void InventoryWindow::useItem(const MWWorld::Ptr &ptr)
+    void InventoryWindow::useItem(const MWWorld::Ptr &ptr, bool force)
     {
         const std::string& script = ptr.getClass().getScript(ptr);
 
@@ -476,12 +513,23 @@ namespace MWGui
         // early-out for items that need to be equipped, but can't be equipped: we don't want to set OnPcEquip in that case
         if (!ptr.getClass().getEquipmentSlots(ptr).first.empty())
         {
-            std::pair<int, std::string> canEquip = ptr.getClass().canBeEquipped(ptr, player);
-            if (canEquip.first == 0)
+            if (ptr.getClass().hasItemHealth(ptr) && ptr.getCellRef().getCharge() == 0)
             {
-                MWBase::Environment::get().getWindowManager()->messageBox(canEquip.second);
+                MWBase::Environment::get().getWindowManager()->messageBox("#{sInventoryMessage1}");
                 updateItemView();
                 return;
+            }
+
+            if (!force)
+            {
+                std::pair<int, std::string> canEquip = ptr.getClass().canBeEquipped(ptr, player);
+
+                if (canEquip.first == 0)
+                {
+                    MWBase::Environment::get().getWindowManager()->messageBox(canEquip.second);
+                    updateItemView();
+                    return;
+                }
             }
         }
 
@@ -494,7 +542,7 @@ namespace MWGui
 
         // Give the script a chance to run once before we do anything else
         // this is important when setting pcskipequip as a reaction to onpcequip being set (bk_treasuryreport does this)
-        if (!script.empty() && MWBase::Environment::get().getWorld()->getScriptsEnabled())
+        if (!force && !script.empty() && MWBase::Environment::get().getWorld()->getScriptsEnabled())
         {
             MWScript::InterpreterContext interpreterContext (&ptr.getRefData().getLocals(), ptr);
             MWBase::Environment::get().getScriptManager()->run (script, interpreterContext);
@@ -505,9 +553,8 @@ namespace MWGui
         {
             if (script.empty() || ptr.getRefData().getLocals().getIntVar(script, "pcskipequip") == 0)
             {
-                std::shared_ptr<MWWorld::Action> action = ptr.getClass().use(ptr);
-
-                action->execute (player);
+                std::shared_ptr<MWWorld::Action> action = ptr.getClass().use(ptr, force);
+                action->execute(player);
             }
             else
                 mSkippedToEquip = ptr;
@@ -574,6 +621,11 @@ namespace MWGui
     {
         // convert to OpenGL lower-left origin
         y = (mAvatarImage->getHeight()-1) - y;
+
+        // Scale coordinates
+        x = int(x*mScaleFactor);
+        y = int(y*mScaleFactor);
+
         int slot = mPreview->getSlotSelected (x, y);
 
         if (slot == -1)
@@ -598,12 +650,28 @@ namespace MWGui
         float capacity = player.getClass().getCapacity(player);
         float encumbrance = player.getClass().getEncumbrance(player);
         mTradeModel->adjustEncumbrance(encumbrance);
-        mEncumbranceBar->setValue(static_cast<int>(encumbrance), static_cast<int>(capacity));
+        mEncumbranceBar->setValue(std::ceil(encumbrance), static_cast<int>(capacity));
     }
 
     void InventoryWindow::onFrame(float dt)
     {
         updateEncumbranceBar();
+
+        if (mPinned)
+        {
+            mUpdateTimer += dt;
+            if (0.1f < mUpdateTimer)
+            {
+                mUpdateTimer = 0;
+
+                // Update pinned inventory in-game
+                if (!MWBase::Environment::get().getWindowManager()->isGuiMode())
+                {
+                    mItemView->update();
+                    notifyContentChanged();
+                }
+            }
+        }
     }
 
     void InventoryWindow::setTrading(bool trading)
@@ -654,6 +722,8 @@ namespace MWGui
             return;
 
         int count = object.getRefData().getCount();
+        if (object.getClass().isGold(object))
+            count *= object.getClass().getValue(object);
 
         MWWorld::Ptr player = MWMechanics::getPlayer();
         MWBase::Environment::get().getWorld()->breakInvisibility(player);

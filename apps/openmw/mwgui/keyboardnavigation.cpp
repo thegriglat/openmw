@@ -6,6 +6,8 @@
 #include <MyGUI_Gui.h>
 #include <MyGUI_Window.h>
 
+#include <components/debug/debuglog.hpp>
+
 #include "../mwbase/windowmanager.hpp"
 #include "../mwbase/environment.hpp"
 
@@ -14,12 +16,17 @@ namespace MWGui
 
 bool shouldAcceptKeyFocus(MyGUI::Widget* w)
 {
+    if (w && w->getUserString("IgnoreTabKey") == "y")
+        return false;
+
     return w && !w->castType<MyGUI::Window>(false) && w->getInheritedEnabled() && w->getInheritedVisible() && w->getVisible() && w->getEnabled();
 }
 
 /// Recursively get all child widgets that accept keyboard input
 void getKeyFocusWidgets(MyGUI::Widget* parent, std::vector<MyGUI::Widget*>& results)
 {
+    assert(parent != nullptr);
+
     if (!parent->getVisible() || !parent->getEnabled())
         return;
 
@@ -39,13 +46,21 @@ void getKeyFocusWidgets(MyGUI::Widget* parent, std::vector<MyGUI::Widget*>& resu
 KeyboardNavigation::KeyboardNavigation()
     : mCurrentFocus(nullptr)
     , mModalWindow(nullptr)
+    , mEnabled(true)
 {
     MyGUI::WidgetManager::getInstance().registerUnlinker(this);
 }
 
 KeyboardNavigation::~KeyboardNavigation()
 {
-    MyGUI::WidgetManager::getInstance().unregisterUnlinker(this);
+    try
+    {
+        MyGUI::WidgetManager::getInstance().unregisterUnlinker(this);
+    }
+    catch(const MyGUI::Exception& e)
+    {
+        Log(Debug::Error) << "Error in the destructor: " << e.what();
+    }
 }
 
 void KeyboardNavigation::saveFocus(int mode)
@@ -101,6 +116,9 @@ bool isRootParent(MyGUI::Widget* widget, MyGUI::Widget* root)
 
 void KeyboardNavigation::onFrame()
 {
+    if (!mEnabled)
+        return;
+
     MyGUI::Widget* focus = MyGUI::InputManager::getInstance().getKeyFocusWidget();
 
     if (focus == mCurrentFocus)
@@ -150,6 +168,11 @@ void KeyboardNavigation::setModalWindow(MyGUI::Widget *window)
     mModalWindow = window;
 }
 
+void KeyboardNavigation::setEnabled(bool enabled)
+{
+    mEnabled = enabled;
+}
+
 enum Direction
 {
     D_Left,
@@ -160,8 +183,11 @@ enum Direction
     D_Prev
 };
 
-bool KeyboardNavigation::injectKeyPress(MyGUI::KeyCode key, unsigned int text)
+bool KeyboardNavigation::injectKeyPress(MyGUI::KeyCode key, unsigned int text, bool repeat)
 {
+    if (!mEnabled)
+        return false;
+
     switch (key.getValue())
     {
     case MyGUI::KeyCode::ArrowLeft:
@@ -177,7 +203,14 @@ bool KeyboardNavigation::injectKeyPress(MyGUI::KeyCode key, unsigned int text)
     case MyGUI::KeyCode::Return:
     case MyGUI::KeyCode::NumpadEnter:
     case MyGUI::KeyCode::Space:
+    {
+        // We should disable repeating for activation keys
+        MyGUI::InputManager::getInstance().injectKeyRelease(MyGUI::KeyCode::None);
+        if (repeat)
+            return true;
+
         return accept();
+    }
     default:
         return false;
     }

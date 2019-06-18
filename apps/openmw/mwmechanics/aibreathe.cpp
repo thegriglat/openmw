@@ -19,16 +19,16 @@ MWMechanics::AiBreathe::AiBreathe()
 
 bool MWMechanics::AiBreathe::execute (const MWWorld::Ptr& actor, CharacterController& characterController, AiState& state, float duration)
 {
-    static const float fHoldBreathTime = MWBase::Environment::get().getWorld()->getStore().get<ESM::GameSetting>().find("fHoldBreathTime")->getFloat();
+    static const float fHoldBreathTime = MWBase::Environment::get().getWorld()->getStore().get<ESM::GameSetting>().find("fHoldBreathTime")->mValue.getFloat();
 
     const MWWorld::Class& actorClass = actor.getClass();
     if (actorClass.isNpc())
     {
         if (actorClass.getNpcStats(actor).getTimeToStartDrowning() < fHoldBreathTime / 2)
         {
-            actor.getClass().getCreatureStats(actor).setMovementFlag(CreatureStats::Flag_Run, true);
+            actorClass.getCreatureStats(actor).setMovementFlag(CreatureStats::Flag_Run, true);
 
-            actor.getClass().getMovementSettings(actor).mPosition[1] = 1;
+            actorClass.getMovementSettings(actor).mPosition[1] = 1;
             smoothTurn(actor, -180, 0);
 
             return false;

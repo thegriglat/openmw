@@ -4,6 +4,7 @@
 #include <vector>
 #include <map>
 #include <set>
+#include <deque>
 
 #include <components/esm/cellid.hpp>
 
@@ -54,6 +55,11 @@ namespace MWMechanics
     struct Movement;
 }
 
+namespace DetourNavigator
+{
+    struct Navigator;
+}
+
 namespace MWWorld
 {
     class CellStore;
@@ -64,11 +70,6 @@ namespace MWWorld
     class RefData;
 
     typedef std::vector<std::pair<MWWorld::Ptr,MWMechanics::Movement> > PtrMovementList;
-}
-
-namespace Fallback
-{
-    class Map;
 }
 
 namespace MWBase
@@ -120,13 +121,13 @@ namespace MWBase
 
             virtual bool toggleWater() = 0;
             virtual bool toggleWorld() = 0;
+            virtual bool toggleBorders() = 0;
 
             virtual void adjustSky() = 0;
 
-            virtual const Fallback::Map *getFallback () const = 0;
-
             virtual MWWorld::Player& getPlayer() = 0;
             virtual MWWorld::Ptr getPlayerPtr() = 0;
+            virtual MWWorld::ConstPtr getPlayerConstPtr() const = 0;
 
             virtual const MWWorld::ESMStore& getStore() const = 0;
 
@@ -175,7 +176,7 @@ namespace MWBase
             ///< Return a pointer to a liveCellRef with the given name.
             /// \param activeOnly do non search inactive cells.
 
-            virtual MWWorld::Ptr searchPtr (const std::string& name, bool activeOnly) = 0;
+            virtual MWWorld::Ptr searchPtr (const std::string& name, bool activeOnly, bool searchInContainers = true) = 0;
             ///< Return a pointer to a liveCellRef with the given name.
             /// \param activeOnly do non search inactive cells.
 
@@ -219,6 +220,8 @@ namespace MWBase
 
             virtual int getCurrentWeather() const = 0;
 
+            virtual unsigned int getNightDayMode() const = 0;
+
             virtual int getMasserPhase() const = 0;
 
             virtual int getSecundaPhase() const = 0;
@@ -261,14 +264,14 @@ namespace MWBase
             ///< Adjust position after load to be on ground. Must be called after model load.
             /// @param force do this even if the ptr is flying
 
-            virtual void fixPosition (const MWWorld::Ptr& actor) = 0;
-            ///< Attempt to fix position so that the Ptr is no longer inside collision geometry.
+            virtual void fixPosition () = 0;
+            ///< Attempt to fix position so that the player is not stuck inside the geometry.
 
             /// @note No-op for items in containers. Use ContainerStore::removeItem instead.
             virtual void deleteObject (const MWWorld::Ptr& ptr) = 0;
             virtual void undeleteObject (const MWWorld::Ptr& ptr) = 0;
 
-            virtual MWWorld::Ptr moveObject (const MWWorld::Ptr& ptr, float x, float y, float z) = 0;
+            virtual MWWorld::Ptr moveObject (const MWWorld::Ptr& ptr, float x, float y, float z, bool moveToActive=false) = 0;
             ///< @return an updated Ptr in case the Ptr's cell changes
 
             virtual MWWorld::Ptr moveObject(const MWWorld::Ptr &ptr, MWWorld::CellStore* newCell, float x, float y, float z, bool movePhysics=true) = 0;
@@ -296,8 +299,15 @@ namespace MWBase
             ///< Queues movement for \a ptr (in local space), to be applied in the next call to
             /// doPhysics.
 
-            virtual bool castRay (float x1, float y1, float z1, float x2, float y2, float z2) = 0;
+            virtual void updateAnimatedCollisionShape(const MWWorld::Ptr &ptr) = 0;
+
+            virtual bool castRay (float x1, float y1, float z1, float x2, float y2, float z2, int mask) = 0;
             ///< cast a Ray and return true if there is an object in the ray path.
+
+            virtual bool castRay (float x1, float y1, float z1, float x2, float y2, float z2) = 0;
+
+            virtual void setActorCollisionMode(const MWWorld::Ptr& ptr, bool internal, bool external) = 0;
+            virtual bool isActorCollisionEnabled(const MWWorld::Ptr& ptr) = 0;
 
             virtual bool toggleCollisionMode() = 0;
             ///< Toggle collision mode for player. If disabled player object should ignore
@@ -357,6 +367,7 @@ namespace MWBase
             /// \return pointer to created record
 
             virtual void update (float duration, bool paused) = 0;
+            virtual void updatePhysics (float duration, bool paused) = 0;
 
             virtual void updateWindowManager () = 0;
 
@@ -411,6 +422,7 @@ namespace MWBase
             /// @note throws an exception when invoked on a teleport door
             virtual void activateDoor(const MWWorld::Ptr& door, int state) = 0;
 
+            virtual void getActorsStandingOn (const MWWorld::ConstPtr& object, std::vector<MWWorld::Ptr> &actors) = 0; ///< get a list of actors standing on \a object
             virtual bool getPlayerStandingOn (const MWWorld::ConstPtr& object) = 0; ///< @return true if the player is standing on \a object
             virtual bool getActorStandingOn (const MWWorld::ConstPtr& object) = 0; ///< @return true if any actor is standing on \a object
             virtual bool getPlayerCollidingWith(const MWWorld::ConstPtr& object) = 0; ///< @return true if the player is colliding with \a object
@@ -436,12 +448,17 @@ namespace MWBase
 
             virtual void enableActorCollision(const MWWorld::Ptr& actor, bool enable) = 0;
 
-            virtual int canRest() = 0;
-            ///< check if the player is allowed to rest \n
-            /// 0 - yes \n
-            /// 1 - only waiting \n
-            /// 2 - player is underwater \n
-            /// 3 - enemies are nearby (not implemented)
+            enum RestPermitted
+            {
+                Rest_Allowed = 0,
+                Rest_OnlyWaiting = 1,
+                Rest_PlayerIsInAir = 2,
+                Rest_PlayerIsUnderwater = 3,
+                Rest_EnemiesAreNearby = 4
+            };
+
+            /// check if the player is allowed to rest
+            virtual RestPermitted canRest() const = 0;
 
             /// \todo Probably shouldn't be here
             virtual MWRender::Animation* getAnimation(const MWWorld::Ptr &ptr) = 0;
@@ -450,6 +467,7 @@ namespace MWBase
 
             /// \todo this does not belong here
             virtual void screenshot (osg::Image* image, int w, int h) = 0;
+            virtual bool screenshot360 (osg::Image* image, std::string settingStr) = 0;
 
             /// Find default position inside exterior cell specified by name
             /// \return false if exterior with given name not exists, true otherwise
@@ -485,18 +503,20 @@ namespace MWBase
              */
             virtual bool startSpellCast (const MWWorld::Ptr& actor) = 0;
 
-            virtual void castSpell (const MWWorld::Ptr& actor) = 0;
+            virtual void castSpell (const MWWorld::Ptr& actor, bool manualSpell=false) = 0;
 
             virtual void launchMagicBolt (const std::string& spellId, const MWWorld::Ptr& caster, const osg::Vec3f& fallbackDirection) = 0;
-            virtual void launchProjectile (MWWorld::Ptr actor, MWWorld::ConstPtr projectile,
-                                           const osg::Vec3f& worldPos, const osg::Quat& orient, MWWorld::Ptr bow, float speed, float attackStrength) = 0;
+            virtual void launchProjectile (MWWorld::Ptr& actor, MWWorld::Ptr& projectile,
+                                           const osg::Vec3f& worldPos, const osg::Quat& orient, MWWorld::Ptr& bow, float speed, float attackStrength) = 0;
+
+            virtual void applyLoopingParticles(const MWWorld::Ptr& ptr) = 0;
 
             virtual const std::vector<std::string>& getContentFiles() const = 0;
 
             virtual void breakInvisibility (const MWWorld::Ptr& actor) = 0;
 
-            // Are we in an exterior or pseudo-exterior cell and it's night?
-            virtual bool isDark() const = 0;
+            // Allow NPCs to use torches?
+            virtual bool useTorches() const = 0;
 
             virtual bool findInteriorPositionInWorldSpace(const MWWorld::CellStore* cell, osg::Vec3f& result) = 0;
 
@@ -532,7 +552,7 @@ namespace MWBase
             /// Spawn a blood effect for \a ptr at \a worldPosition
             virtual void spawnBloodEffect (const MWWorld::Ptr& ptr, const osg::Vec3f& worldPosition) = 0;
 
-            virtual void spawnEffect (const std::string& model, const std::string& textureOverride, const osg::Vec3f& worldPos) = 0;
+            virtual void spawnEffect (const std::string& model, const std::string& textureOverride, const osg::Vec3f& worldPos, float scale = 1.f, bool isMagicVFX = true) = 0;
 
             virtual void explodeSpell(const osg::Vec3f& origin, const ESM::EffectList& effects, const MWWorld::Ptr& caster,
                                       const MWWorld::Ptr& ignore, ESM::RangeType rangeType, const std::string& id,
@@ -558,9 +578,17 @@ namespace MWBase
             /// Return the distance between actor's weapon and target's collision box.
             virtual float getHitDistance(const MWWorld::ConstPtr& actor, const MWWorld::ConstPtr& target) = 0;
 
+            virtual void addContainerScripts(const MWWorld::Ptr& reference, MWWorld::CellStore* cell) = 0;
             virtual void removeContainerScripts(const MWWorld::Ptr& reference) = 0;
 
             virtual bool isPlayerInJail() const = 0;
+
+            virtual void rest(double hours) = 0;
+
+            virtual void setPlayerTraveling(bool traveling) = 0;
+            virtual bool isPlayerTraveling() const = 0;
+
+            virtual void rotateWorldObject (const MWWorld::Ptr& ptr, osg::Quat rotate) = 0;
 
             /// Return terrain height at \a worldPos position.
             virtual float getTerrainHeightAt(const osg::Vec3f& worldPos) const = 0;
@@ -574,6 +602,18 @@ namespace MWBase
 
             /// Preload VFX associated with this effect list
             virtual void preloadEffects(const ESM::EffectList* effectList) = 0;
+
+            virtual DetourNavigator::Navigator* getNavigator() const = 0;
+
+            virtual void updateActorPath(const MWWorld::ConstPtr& actor, const std::deque<osg::Vec3f>& path,
+                    const osg::Vec3f& halfExtents, const osg::Vec3f& start, const osg::Vec3f& end) const = 0;
+
+            virtual void removeActorPath(const MWWorld::ConstPtr& actor) const = 0;
+
+            virtual void setNavMeshNumberToRender(const std::size_t value) = 0;
+
+            /// Return physical half extents of the given actor to be used in pathfinding
+            virtual osg::Vec3f getPathfindingHalfExtents(const MWWorld::ConstPtr& actor) const = 0;
     };
 }
 

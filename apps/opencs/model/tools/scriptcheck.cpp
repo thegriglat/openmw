@@ -30,14 +30,11 @@ void CSMTools::ScriptCheckStage::report (const std::string& message, const Compi
 
     CSMWorld::UniversalId id (CSMWorld::UniversalId::Type_Script, mId);
 
-    stream
-        << "script " << mFile
-        << ", line " << loc.mLine << ", column " << loc.mColumn
-        << " (" << loc.mLiteral << "): " << message;
+    stream << message << " (" << loc.mLiteral  << ")" << " @ line " << loc.mLine+1 << ", column " << loc.mColumn;
 
     std::ostringstream hintStream;
 
-    hintStream << "l:" << loc.mLine << " " << loc.mColumn;
+    hintStream << "l:" << loc.mLine+1 << " " << loc.mColumn;
 
     mMessages->add (id, stream.str(), hintStream.str(), getSeverity (type));
 }
@@ -47,7 +44,7 @@ void CSMTools::ScriptCheckStage::report (const std::string& message, Type type)
     CSMWorld::UniversalId id (CSMWorld::UniversalId::Type_Script, mId);
 
     std::ostringstream stream;
-    stream << "script " << mFile << ": " << message;
+    stream << message;
 
     mMessages->add (id, stream.str(), "", getSeverity (type));
 }
@@ -60,6 +57,8 @@ CSMTools::ScriptCheckStage::ScriptCheckStage (const CSMDoc::Document& document)
 
     Compiler::registerExtensions (mExtensions);
     mContext.setExtensions (&mExtensions);
+
+    mIgnoreBaseRecords = false;
 }
 
 int CSMTools::ScriptCheckStage::setup()
@@ -78,15 +77,23 @@ int CSMTools::ScriptCheckStage::setup()
     mId.clear();
     Compiler::ErrorHandler::reset();
 
+    mIgnoreBaseRecords = CSMPrefs::get()["Reports"]["ignore-base-records"].isTrue();
+
     return mDocument.getData().getScripts().getSize();
 }
 
 void CSMTools::ScriptCheckStage::perform (int stage, CSMDoc::Messages& messages)
 {
+    const CSMWorld::Record<ESM::Script> &record = mDocument.getData().getScripts().getRecord(stage);
+
     mId = mDocument.getData().getScripts().getId (stage);
 
     if (mDocument.isBlacklisted (
         CSMWorld::UniversalId (CSMWorld::UniversalId::Type_Script, mId)))
+        return;
+
+    // Skip "Base" records (setting!) and "Deleted" records
+    if ((mIgnoreBaseRecords && record.mState == CSMWorld::RecordBase::State_BaseOnly) || record.isDeleted())
         return;
 
     mMessages = &messages;
@@ -100,10 +107,8 @@ void CSMTools::ScriptCheckStage::perform (int stage, CSMDoc::Messages& messages)
 
     try
     {
-        const CSMWorld::Data& data = mDocument.getData();
-
-        mFile = data.getScripts().getRecord (stage).get().mId;
-        std::istringstream input (data.getScripts().getRecord (stage).get().mScriptText);
+        mFile = record.get().mId;
+        std::istringstream input (record.get().mScriptText);
 
         Compiler::Scanner scanner (*this, input, mContext.getExtensions());
 
@@ -120,7 +125,7 @@ void CSMTools::ScriptCheckStage::perform (int stage, CSMDoc::Messages& messages)
         CSMWorld::UniversalId id (CSMWorld::UniversalId::Type_Script, mId);
 
         std::ostringstream stream;
-        stream << "script " << mFile << ": " << error.what();
+        stream << error.what();
 
         messages.add (id, stream.str(), "", CSMDoc::Message::Severity_SeriousError);
     }

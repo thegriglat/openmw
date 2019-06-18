@@ -1,5 +1,4 @@
 #include <iostream>
-#include <csignal>
 
 #include <QApplication>
 #include <QTextCodec>
@@ -12,23 +11,18 @@
 #define MAC_OS_X_VERSION_MIN_REQUIRED __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__
 #endif // MAC_OS_X_VERSION_MIN_REQUIRED
 
-#include <SDL.h>
-
 #include "maindialog.hpp"
+#include "sdlinit.hpp"
 
 int main(int argc, char *argv[])
 {
     try
     {
-        SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
-        SDL_SetMainReady();
-        if (SDL_Init(SDL_INIT_VIDEO) != 0)
-        {
-            qDebug() << "SDL_Init failed: " << QString::fromUtf8(SDL_GetError());
-            return 0;
-        }
-        signal(SIGINT, SIG_DFL); // We don't want to use the SDL event loop in the launcher,
-                                 // so reset SIGINT which SDL wants to redirect to an SDL_Quit event.
+// Note: we should init SDL2 before Qt4 to avoid crashes on Linux,
+// but we should init SDL2 after Qt5 to avoid input issues on MacOS X.
+#if QT_VERSION < QT_VERSION_CHECK(5,0,0)
+        initSDL();
+#endif
 
         QApplication app(argc, argv);
 
@@ -46,9 +40,14 @@ int main(int argc, char *argv[])
         if (result == Launcher::FirstRunDialogResultContinue)
             mainWin.show();
 
-        int returnValue = app.exec();
-        SDL_Quit();
-        return returnValue;
+        int exitCode = app.exec();
+
+#if QT_VERSION < QT_VERSION_CHECK(5,0,0)
+        // Disconnect from SDL processes
+        quitSDL();
+#endif
+
+        return exitCode;
     }
     catch (std::exception& e)
     {

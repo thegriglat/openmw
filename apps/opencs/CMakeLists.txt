@@ -19,6 +19,7 @@ opencs_hdrs_noqt (model/doc
 
 opencs_units (model/world
     idtable idtableproxymodel regionmap data commanddispatcher idtablebase resourcetable nestedtableproxymodel idtree infotableproxymodel landtexturetableproxymodel
+    actoradapter
     )
 
 
@@ -42,7 +43,7 @@ opencs_units_noqt (model/tools
     mandatoryid skillcheck classcheck factioncheck racecheck soundcheck regioncheck
     birthsigncheck spellcheck referencecheck referenceablecheck scriptcheck bodypartcheck
     startscriptcheck search searchoperation searchstage pathgridcheck soundgencheck magiceffectcheck
-    mergestages gmstcheck topicinfocheck journalcheck
+    mergestages gmstcheck topicinfocheck journalcheck enchantmentcheck
     )
 
 opencs_hdrs_noqt (model/tools
@@ -81,14 +82,14 @@ opencs_units_noqt (view/world
 
 opencs_units (view/widget
     scenetoolbar scenetool scenetoolmode pushbutton scenetooltoggle scenetoolrun modebutton
-    scenetooltoggle2 completerpopup coloreditor colorpickerpopup droplineedit
+    scenetooltoggle2 scenetooltexturebrush completerpopup coloreditor colorpickerpopup droplineedit
     )
 
 opencs_units (view/render
     scenewidget worldspacewidget pagedworldspacewidget unpagedworldspacewidget
     previewwidget editmode instancemode instanceselectionmode instancemovemode
     orbitcameramode pathgridmode selectionmode pathgridselectionmode cameracontroller
-    cellwater
+    cellwater terraintexturemode actor
     )
 
 opencs_units_noqt (view/render
@@ -246,7 +247,7 @@ if (DESIRED_QT_VERSION MATCHES 4)
         target_link_libraries(openmw-cs ${QT_QTMAIN_LIBRARY})
     endif()
 else()
-    qt5_use_modules(openmw-cs Widgets Core Network OpenGL)
+    target_link_libraries(openmw-cs Qt5::Widgets Qt5::Core Qt5::Network Qt5::OpenGL)
 endif()
 
 if (WIN32)

@@ -10,9 +10,8 @@
 #include <MyGUI_TextBox.h>
 
 #include <components/misc/rng.hpp>
-
+#include <components/debug/debuglog.hpp>
 #include <components/myguiplatform/myguitexture.hpp>
-
 #include <components/settings/settings.hpp>
 #include <components/vfs/manager.hpp>
 
@@ -37,6 +36,7 @@ namespace MWGui
         , mLastRenderTime(0.0)
         , mLoadingOnTime(0.0)
         , mImportantLabel(false)
+        , mVisible(false)
         , mProgress(0)
         , mShowWallpaper(true)
     {
@@ -93,10 +93,10 @@ namespace MWGui
             ++found;
         }
         if (mSplashScreens.empty())
-            std::cerr << "No splash screens found!" << std::endl;
+            Log(Debug::Warning) << "Warning: no splash screens found!";
     }
 
-    void LoadingScreen::setLabel(const std::string &label, bool important)
+    void LoadingScreen::setLabel(const std::string &label, bool important, bool center)
     {
         mImportantLabel = important;
 
@@ -105,7 +105,11 @@ namespace MWGui
         MyGUI::IntSize size(mLoadingText->getTextSize().width+padding, mLoadingBox->getHeight());
         size.width = std::max(300, size.width);
         mLoadingBox->setSize(size);
-        mLoadingBox->setPosition(mMainWidget->getWidth()/2 - mLoadingBox->getWidth()/2, mLoadingBox->getTop());
+
+        if (center)
+            mLoadingBox->setPosition(mMainWidget->getWidth()/2 - mLoadingBox->getWidth()/2, mMainWidget->getHeight()/2 - mLoadingBox->getHeight()/2);
+        else
+            mLoadingBox->setPosition(mMainWidget->getWidth()/2 - mLoadingBox->getWidth()/2, mMainWidget->getHeight() - mLoadingBox->getHeight() - 8);
     }
 
     void LoadingScreen::setVisible(bool visible)
@@ -129,22 +133,23 @@ namespace MWGui
     public:
         CopyFramebufferToTextureCallback(osg::Texture2D* texture)
             : mTexture(texture)
+            , oneshot(true)
         {
         }
 
         virtual void operator () (osg::RenderInfo& renderInfo) const
         {
+            if (!oneshot)
+                return;
+            oneshot = false;
             int w = renderInfo.getCurrentCamera()->getViewport()->width();
             int h = renderInfo.getCurrentCamera()->getViewport()->height();
             mTexture->copyTexImage2D(*renderInfo.getState(), 0, 0, w, h);
-
-            // Callback removes itself when done
-            if (renderInfo.getCurrentCamera())
-                renderInfo.getCurrentCamera()->setInitialDrawCallback(NULL);
         }
 
     private:
         osg::ref_ptr<osg::Texture2D> mTexture;
+        mutable bool oneshot;
     };
 
     class DontComputeBoundCallback : public osg::Node::ComputeBoundingSphereCallback
@@ -153,27 +158,29 @@ namespace MWGui
         virtual osg::BoundingSphere computeBound(const osg::Node&) const { return osg::BoundingSphere(); }
     };
 
-    void LoadingScreen::loadingOn()
+    void LoadingScreen::loadingOn(bool visible)
     {
         mLoadingOnTime = mTimer.time_m();
         // Early-out if already on
         if (mMainWidget->getVisible())
             return;
 
-        if (mViewer->getIncrementalCompileOperation())
-        {
-            mViewer->getIncrementalCompileOperation()->setMaximumNumOfObjectsToCompilePerFrame(100);
-            mViewer->getIncrementalCompileOperation()->setTargetFrameRate(getTargetFrameRate());
-        }
-
         // Assign dummy bounding sphere callback to avoid the bounding sphere of the entire scene being recomputed after each frame of loading
         // We are already using node masks to avoid the scene from being updated/rendered, but node masks don't work for computeBound()
         mViewer->getSceneData()->setComputeBoundingSphereCallback(new DontComputeBoundCallback);
 
-        mShowWallpaper = (MWBase::Environment::get().getStateManager()->getState()
-                == MWBase::StateManager::State_NoGame);
-
+        mVisible = visible;
+        mLoadingBox->setVisible(mVisible);
         setVisible(true);
+
+        if (!mVisible)
+        {
+            mShowWallpaper = false;
+            draw();
+            return;
+        }
+
+        mShowWallpaper = MWBase::Environment::get().getStateManager()->getState() == MWBase::StateManager::State_NoGame;
 
         if (mShowWallpaper)
         {
@@ -185,6 +192,8 @@ namespace MWGui
 
     void LoadingScreen::loadingOff()
     {
+        mLoadingBox->setVisible(true);   // restore
+
         if (mLastRenderTime < mLoadingOnTime)
         {
             // the loading was so fast that we didn't show loading screen at all
@@ -198,7 +207,7 @@ namespace MWGui
         else
             mImportantLabel = false; // label was already shown on loading screen
 
-        mViewer->getSceneData()->setComputeBoundingSphereCallback(NULL);
+        mViewer->getSceneData()->setComputeBoundingSphereCallback(nullptr);
         mViewer->getSceneData()->dirtyBound();
 
         //std::cout << "loading took " << mTimer.time_m() - mLoadingOnTime << std::endl;
@@ -295,6 +304,8 @@ namespace MWGui
             mGuiTexture.reset(new osgMyGUI::OSGTexture(mTexture));
         }
 
+        // Notice that the next time this is called, the current CopyFramebufferToTextureCallback will be deleted
+        // so there's no memory leak as at most one object of type CopyFramebufferToTextureCallback is allocated at a time.
         mViewer->getCamera()->setInitialDrawCallback(new CopyFramebufferToTextureCallback(mTexture));
 
         mBackgroundImage->setBackgroundImage("");
@@ -307,7 +318,7 @@ namespace MWGui
 
     void LoadingScreen::draw()
     {
-        if (!needToDrawLoadingScreen())
+        if (mVisible && !needToDrawLoadingScreen())
             return;
 
         if (mShowWallpaper && mTimer.time_m() > mLastWallpaperChangeTime + 5000*1)

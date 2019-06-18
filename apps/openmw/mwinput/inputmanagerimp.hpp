@@ -4,6 +4,7 @@
 #include "../mwgui/mode.hpp"
 
 #include <osg/ref_ptr>
+#include <osgViewer/ViewerEventHandlers>
 
 #include <extern/oics/ICSChannelListener.h>
 #include <extern/oics/ICSInputControlSystem.h>
@@ -13,7 +14,6 @@
 #include <components/sdlutil/events.hpp>
 
 #include "../mwbase/inputmanager.hpp"
-
 
 namespace MWWorld
 {
@@ -74,6 +74,7 @@ namespace MWInput
             SDL_Window* window,
             osg::ref_ptr<osgViewer::Viewer> viewer,
             osg::ref_ptr<osgViewer::ScreenCaptureHandler> screenCaptureHandler,
+            osgViewer::ScreenCaptureHandler::CaptureOperation *screenCaptureOperation,
             const std::string& userFile, bool userFileExists,
             const std::string& controllerBindingsFile, bool grab);
 
@@ -158,6 +159,7 @@ namespace MWInput
         bool mWindowVisible;
         osg::ref_ptr<osgViewer::Viewer> mViewer;
         osg::ref_ptr<osgViewer::ScreenCaptureHandler> mScreenCaptureHandler;
+        osgViewer::ScreenCaptureHandler::CaptureOperation *mScreenCaptureOperation;
 
         bool mJoystickLastUsed;
         MWWorld::Player* mPlayer;
@@ -173,9 +175,11 @@ namespace MWInput
 
         bool mGrabCursor;
 
+        bool mInvertX;
         bool mInvertY;
 
         bool mControlsDisabled;
+        bool mJoystickEnabled;
 
         float mCameraSensitivity;
         float mCameraYMultiplier;
@@ -184,6 +188,7 @@ namespace MWInput
 
         bool mMouseLookEnabled;
         bool mGuiCursorEnabled;
+        bool mGamepadGuiCursorEnabled;
 
         bool mDetectingKeyboard;
 
@@ -192,9 +197,12 @@ namespace MWInput
         float mGuiCursorX;
         float mGuiCursorY;
         int mMouseWheel;
+        float mGamepadZoom;
         bool mUserFileExists;
         bool mAlwaysRunActive;
         bool mSneakToggles;
+        float mSneakToggleShortcutTimer;
+        bool mSneakGamepadShortcut;
         bool mSneaking;
         bool mAttemptJump;
 
@@ -215,6 +223,9 @@ namespace MWInput
 
         void setPlayerControlsEnabled(bool enabled);
         void handleGuiArrowKey(int action);
+        // Return true if GUI consumes input.
+        bool gamepadToGuiControl(const SDL_ControllerButtonEvent &arg, bool release);
+        bool gamepadToGuiControl(const SDL_ControllerAxisEvent &arg);
 
         void updateCursorMode();
 
@@ -222,6 +233,7 @@ namespace MWInput
 
     private:
         void toggleMainMenu();
+        void toggleOptionsMenu();
         void toggleSpell();
         void toggleWeapon();
         void toggleInventory();
@@ -313,6 +325,8 @@ namespace MWInput
             A_LookLeftRight,
             A_MoveForwardBackward,
             A_MoveLeftRight,
+
+            A_OptionsMenu,
 
             A_Last            // Marker for the last item
         };

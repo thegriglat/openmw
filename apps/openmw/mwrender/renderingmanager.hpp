@@ -3,6 +3,7 @@
 
 #include <osg/ref_ptr>
 #include <osg/Light>
+#include <osg/Camera>
 
 #include <components/settings/settings.hpp>
 
@@ -10,6 +11,9 @@
 
 #include "renderinginterface.hpp"
 #include "rendermode.hpp"
+
+#include <deque>
+#include <memory>
 
 namespace osg
 {
@@ -50,8 +54,15 @@ namespace Fallback
 
 namespace SceneUtil
 {
+    class ShadowManager;
     class WorkQueue;
     class UnrefQueue;
+}
+
+namespace DetourNavigator
+{
+    struct Navigator;
+    struct Settings;
 }
 
 namespace MWRender
@@ -67,12 +78,15 @@ namespace MWRender
     class Water;
     class TerrainStorage;
     class LandManager;
+    class NavMesh;
+    class ActorsPaths;
 
     class RenderingManager : public MWRender::RenderingInterface
     {
     public:
-        RenderingManager(osgViewer::Viewer* viewer, osg::ref_ptr<osg::Group> rootNode, Resource::ResourceSystem* resourceSystem, SceneUtil::WorkQueue* workQueue,
-                         const Fallback::Map* fallback, const std::string& resourcePath);
+        RenderingManager(osgViewer::Viewer* viewer, osg::ref_ptr<osg::Group> rootNode,
+                         Resource::ResourceSystem* resourceSystem, SceneUtil::WorkQueue* workQueue,
+                         const std::string& resourcePath, DetourNavigator::Navigator& navigator);
         ~RenderingManager();
 
         MWRender::Objects& getObjects();
@@ -106,7 +120,7 @@ namespace MWRender
 
         void configureAmbient(const ESM::Cell* cell);
         void configureFog(const ESM::Cell* cell);
-        void configureFog(float fogDepth, float underwaterFog, const osg::Vec4f& colour);
+        void configureFog(float fogDepth, float underwaterFog, float dlFactor, float dlOffset, const osg::Vec4f& colour);
 
         void addCell(const MWWorld::CellStore* store);
         void removeCell(const MWWorld::CellStore* store);
@@ -125,7 +139,8 @@ namespace MWRender
         void setWaterHeight(float level);
 
         /// Take a screenshot of w*h onto the given image, not including the GUI.
-        void screenshot(osg::Image* image, int w, int h);
+        void screenshot(osg::Image* image, int w, int h, osg::Matrixd cameraTransform=osg::Matrixd());
+        bool screenshot360(osg::Image* image, std::string settingStr);
 
         struct RayResult
         {
@@ -201,9 +216,20 @@ namespace MWRender
         /// reset a previous overrideFieldOfView() call, i.e. revert to field of view specified in the settings file.
         void resetFieldOfView();
 
+        osg::Vec3f getHalfExtents(const MWWorld::ConstPtr& object) const;
+
         void exportSceneGraph(const MWWorld::Ptr& ptr, const std::string& filename, const std::string& format);
 
         LandManager* getLandManager() const;
+
+        bool toggleBorders();
+
+        void updateActorPath(const MWWorld::ConstPtr& actor, const std::deque<osg::Vec3f>& path,
+                const osg::Vec3f& halfExtents, const osg::Vec3f& start, const osg::Vec3f& end) const;
+
+        void removeActorPath(const MWWorld::ConstPtr& actor) const;
+
+        void setNavMeshNumber(const std::size_t value);
 
     private:
         void updateProjectionMatrix();
@@ -212,6 +238,10 @@ namespace MWRender
         void setFogColor(const osg::Vec4f& color);
 
         void reportStats() const;
+
+        void renderCameraToImage(osg::Camera *camera, osg::Image *image, int w, int h);
+
+        void updateNavMesh();
 
         osg::ref_ptr<osgUtil::IntersectionVisitor> getIntersectionVisitor(osgUtil::Intersector* intersector, bool ignorePlayer, bool ignoreActors);
 
@@ -227,6 +257,10 @@ namespace MWRender
 
         osg::ref_ptr<osg::Light> mSunLight;
 
+        DetourNavigator::Navigator& mNavigator;
+        std::unique_ptr<NavMesh> mNavMesh;
+        std::size_t mNavMeshNumber = 0;
+        std::unique_ptr<ActorsPaths> mActorsPaths;
         std::unique_ptr<Pathgrid> mPathgrid;
         std::unique_ptr<Objects> mObjects;
         std::unique_ptr<Water> mWater;
@@ -234,6 +268,7 @@ namespace MWRender
         TerrainStorage* mTerrainStorage;
         std::unique_ptr<SkyManager> mSky;
         std::unique_ptr<EffectManager> mEffectManager;
+        std::unique_ptr<SceneUtil::ShadowManager> mShadowManager;
         osg::ref_ptr<NpcAnimation> mPlayerAnimation;
         osg::ref_ptr<SceneUtil::PositionAttitudeTransform> mPlayerNode;
         std::unique_ptr<Camera> mCamera;
@@ -241,10 +276,12 @@ namespace MWRender
 
         osg::ref_ptr<StateUpdater> mStateUpdater;
 
-        float mFogDepth;
+        float mLandFogStart;
+        float mLandFogEnd;
+        float mUnderwaterFogStart;
+        float mUnderwaterFogEnd;
         osg::Vec4f mUnderwaterColor;
         float mUnderwaterWeight;
-        float mUnderwaterFog;
         float mUnderwaterIndoorFog;
         osg::Vec4f mFogColor;
 
@@ -253,10 +290,13 @@ namespace MWRender
 
         float mNearClip;
         float mViewDistance;
+        bool mDistantFog : 1;
+        bool mDistantTerrain : 1;
+        bool mFieldOfViewOverridden : 1;
         float mFieldOfViewOverride;
-        bool mFieldOfViewOverridden;
         float mFieldOfView;
         float mFirstPersonFieldOfView;
+        bool mBorders;
 
         void operator = (const RenderingManager&);
         RenderingManager(const RenderingManager&);

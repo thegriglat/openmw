@@ -3,11 +3,9 @@
 #include <components/esm/loadappa.hpp>
 
 #include "../mwbase/environment.hpp"
-#include "../mwbase/world.hpp"
 #include "../mwbase/windowmanager.hpp"
 
 #include "../mwworld/ptr.hpp"
-#include "../mwworld/actiontake.hpp"
 #include "../mwworld/actionalchemy.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwphysics/physicssystem.hpp"
@@ -124,10 +122,9 @@ namespace MWClass
         return info;
     }
 
-
-    std::shared_ptr<MWWorld::Action> Apparatus::use (const MWWorld::Ptr& ptr) const
+    std::shared_ptr<MWWorld::Action> Apparatus::use (const MWWorld::Ptr& ptr, bool force) const
     {
-        return std::shared_ptr<MWWorld::Action>(new MWWorld::ActionAlchemy());
+        return std::shared_ptr<MWWorld::Action>(new MWWorld::ActionAlchemy(force));
     }
 
     MWWorld::Ptr Apparatus::copyToCellImpl(const MWWorld::ConstPtr &ptr, MWWorld::CellStore &cell) const

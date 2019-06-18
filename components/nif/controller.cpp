@@ -101,6 +101,18 @@ namespace Nif
         data.post(nif);
     }
 
+    void NiLookAtController::read(NIFStream *nif)
+    {
+        Controller::read(nif);
+        target.read(nif);
+    }
+
+    void NiLookAtController::post(NIFFile *nif)
+    {
+        Controller::post(nif);
+        target.post(nif);
+    }
+
     void NiPathController::read(NIFStream *nif)
     {
         Controller::read(nif);
@@ -127,7 +139,7 @@ namespace Nif
     {
         Controller::read(nif);
 
-        nif->getUShort(); // always 0
+        uvSet = nif->getUShort();
         data.read(nif);
     }
 
@@ -156,6 +168,18 @@ namespace Nif
     }
 
     void NiAlphaController::post(NIFFile *nif)
+    {
+        Controller::post(nif);
+        data.post(nif);
+    }
+
+    void NiRollController::read(NIFStream *nif)
+    {
+        Controller::read(nif);
+        data.read(nif);
+    }
+
+    void NiRollController::post(NIFFile *nif)
     {
         Controller::post(nif);
         data.post(nif);

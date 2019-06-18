@@ -1,7 +1,5 @@
 #include "myguirendermanager.hpp"
 
-#include <stdexcept>
-
 #include <MyGUI_Gui.h>
 #include <MyGUI_Timer.h>
 
@@ -52,7 +50,7 @@ public:
     {
     public:
         FrameUpdate()
-            : mRenderManager(NULL)
+            : mRenderManager(nullptr)
         {
         }
 
@@ -76,7 +74,7 @@ public:
     {
     public:
         CollectDrawCalls()
-            : mRenderManager(NULL)
+            : mRenderManager(nullptr)
         {
         }
 
@@ -134,9 +132,9 @@ public:
             {
                 state->bindVertexBufferObject(bufferobject);
 
-                glVertexPointer(3, GL_FLOAT, sizeof(MyGUI::Vertex), (char*)NULL);
-                glColorPointer(4, GL_UNSIGNED_BYTE, sizeof(MyGUI::Vertex), (char*)NULL + 12);
-                glTexCoordPointer(2, GL_FLOAT, sizeof(MyGUI::Vertex), (char*)NULL + 16);
+                glVertexPointer(3, GL_FLOAT, sizeof(MyGUI::Vertex), reinterpret_cast<char*>(0));
+                glColorPointer(4, GL_UNSIGNED_BYTE, sizeof(MyGUI::Vertex), reinterpret_cast<char*>(12));
+                glTexCoordPointer(2, GL_FLOAT, sizeof(MyGUI::Vertex), reinterpret_cast<char*>(16));
             }
             else
             {
@@ -355,7 +353,7 @@ RenderManager::RenderManager(osgViewer::Viewer *viewer, osg::Group *sceneroot, R
   , mUpdate(false)
   , mIsInitialise(false)
   , mInvScalingFactor(1.f)
-  , mInjectState(NULL)
+  , mInjectState(nullptr)
 {
     if (scalingFactor != 0.f)
         mInvScalingFactor = 1.f / scalingFactor;
@@ -537,7 +535,7 @@ void RenderManager::destroyTexture(MyGUI::ITexture *texture)
 MyGUI::ITexture* RenderManager::getTexture(const std::string &name)
 {
     if (name.empty())
-        return NULL;
+        return nullptr;
 
     MapTexture::const_iterator item = mTextures.find(name);
     if(item == mTextures.end())

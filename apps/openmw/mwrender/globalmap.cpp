@@ -1,7 +1,5 @@
 #include "globalmap.hpp"
 
-#include <climits>
-
 #include <osg/Image>
 #include <osg/Texture2D>
 #include <osg/Group>
@@ -14,6 +12,8 @@
 #include <components/loadinglistener/loadinglistener.hpp>
 #include <components/settings/settings.hpp>
 #include <components/files/memorystream.hpp>
+
+#include <components/debug/debuglog.hpp>
 
 #include <components/sceneutil/workqueue.hpp>
 
@@ -125,7 +125,7 @@ namespace MWRender
                     {
                         for (int cellX=0; cellX<mCellSize; ++cellX)
                         {
-                            int vertexX = static_cast<int>(float(cellX)/float(mCellSize) * 9);
+                            int vertexX = static_cast<int>(float(cellX) / float(mCellSize) * 9);
                             int vertexY = static_cast<int>(float(cellY) / float(mCellSize) * 9);
 
                             int texelX = (x-mMinX) * mCellSize + cellX;
@@ -135,9 +135,9 @@ namespace MWRender
 
                             float y2 = 0;
                             if (land && (land->mDataTypes & ESM::Land::DATA_WNAM))
-                                y2 = (land->mWnam[vertexY * 9 + vertexX] << 4) / 2048.f;
+                                y2 = land->mWnam[vertexY * 9 + vertexX] / 128.f;
                             else
-                                y2 = (SCHAR_MIN << 4) / 2048.f;
+                                y2 = SCHAR_MIN / 128.f;
                             if (y2 < 0)
                             {
                                 r = static_cast<unsigned char>(14 * y2 + 38);
@@ -234,10 +234,10 @@ namespace MWRender
 
     GlobalMap::~GlobalMap()
     {
-        for (CameraVector::iterator it = mCamerasPendingRemoval.begin(); it != mCamerasPendingRemoval.end(); ++it)
-            removeCamera(*it);
-        for (CameraVector::iterator it = mActiveCameras.begin(); it != mActiveCameras.end(); ++it)
-            removeCamera(*it);
+        for (auto& camera : mCamerasPendingRemoval)
+            removeCamera(camera);
+        for (auto& camera : mActiveCameras)
+            removeCamera(camera);
 
         if (mWorkItem)
             mWorkItem->waitTillDone();
@@ -271,9 +271,9 @@ namespace MWRender
 
     void GlobalMap::worldPosToImageSpace(float x, float z, float& imageX, float& imageY)
     {
-        imageX = float(x / 8192.f - mMinX) / (mMaxX - mMinX + 1);
+        imageX = float(x / float(Constants::CellSizeInUnits) - mMinX) / (mMaxX - mMinX + 1);
 
-        imageY = 1.f-float(z / 8192.f - mMinY) / (mMaxY - mMinY + 1);
+        imageY = 1.f-float(z / float(Constants::CellSizeInUnits) - mMinY) / (mMaxY - mMinY + 1);
     }
 
     void GlobalMap::cellTopLeftCornerToImageSpace(int x, int y, float& imageX, float& imageY)
@@ -293,7 +293,7 @@ namespace MWRender
         camera->setViewMatrix(osg::Matrix::identity());
         camera->setProjectionMatrix(osg::Matrix::identity());
         camera->setProjectionResizePolicy(osg::Camera::FIXED);
-        camera->setRenderOrder(osg::Camera::PRE_RENDER);
+        camera->setRenderOrder(osg::Camera::PRE_RENDER, 1); // Make sure the global map is rendered after the local map
         y = mHeight - y - height; // convert top-left origin to bottom-left
         camera->setViewport(x, y, width, height);
 
@@ -411,14 +411,14 @@ namespace MWRender
         osgDB::ReaderWriter* readerwriter = osgDB::Registry::instance()->getReaderWriterForExtension("png");
         if (!readerwriter)
         {
-            std::cerr << "Error: Can't write map overlay: no png readerwriter found" << std::endl;
+            Log(Debug::Error) << "Error: Can't write map overlay: no png readerwriter found";
             return;
         }
 
         osgDB::ReaderWriter::WriteResult result = readerwriter->writeImage(*mOverlayImage, ostream);
         if (!result.success())
         {
-            std::cerr << "Error: Can't write map overlay: " << result.message() << " code " << result.status() << std::endl;
+            Log(Debug::Warning) << "Error: Can't write map overlay: " << result.message() << " code " << result.status();
             return;
         }
 
@@ -463,14 +463,14 @@ namespace MWRender
         osgDB::ReaderWriter* readerwriter = osgDB::Registry::instance()->getReaderWriterForExtension("png");
         if (!readerwriter)
         {
-            std::cerr << "Error: Can't read map overlay: no png readerwriter found" << std::endl;
+            Log(Debug::Error) << "Error: Can't read map overlay: no png readerwriter found";
             return;
         }
 
         osgDB::ReaderWriter::ReadResult result = readerwriter->readImage(istream);
         if (!result.success())
         {
-            std::cerr << "Error: Can't read map overlay: " << result.message() << " code " << result.status() << std::endl;
+            Log(Debug::Error) << "Error: Can't read map overlay: " << result.message() << " code " << result.status();
             return;
         }
 
@@ -563,7 +563,7 @@ namespace MWRender
 
             requestOverlayTextureUpdate(0, 0, mWidth, mHeight, osg::ref_ptr<osg::Texture2D>(), true, false);
 
-            mWorkItem = NULL;
+            mWorkItem = nullptr;
         }
     }
 
@@ -572,7 +572,7 @@ namespace MWRender
         CameraVector::iterator found = std::find(mActiveCameras.begin(), mActiveCameras.end(), camera);
         if (found == mActiveCameras.end())
         {
-            std::cerr << "Error: GlobalMap trying to remove an inactive camera" << std::endl;
+            Log(Debug::Error) << "Error: GlobalMap trying to remove an inactive camera";
             return;
         }
         mActiveCameras.erase(found);
@@ -581,8 +581,8 @@ namespace MWRender
 
     void GlobalMap::cleanupCameras()
     {
-        for (CameraVector::iterator it = mCamerasPendingRemoval.begin(); it != mCamerasPendingRemoval.end(); ++it)
-            removeCamera(*it);
+        for (auto& camera : mCamerasPendingRemoval)
+            removeCamera(camera);
 
         mCamerasPendingRemoval.clear();
 

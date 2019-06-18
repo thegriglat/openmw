@@ -58,12 +58,15 @@ namespace MWGui
 
             void clear();
 
-            void useItem(const MWWorld::Ptr& ptr);
+            void useItem(const MWWorld::Ptr& ptr, bool force=false);
 
             void setGuiMode(GuiMode mode);
 
             /// Cycle to previous/next weapon
             void cycle(bool next);
+
+        protected:
+            virtual void onTitleDoubleClicked();
 
         private:
             DragAndDrop* mDragAndDrop;
@@ -101,11 +104,17 @@ namespace MWGui
             std::unique_ptr<MWRender::InventoryPreview> mPreview;
 
             bool mTrading;
+            float mScaleFactor;
+            float mUpdateTimer;
+
+            void toggleMaximized();
 
             void onItemSelected(int index);
             void onItemSelectedFromSourceModel(int index);
 
             void onBackgroundSelected();
+
+            std::string getModeSetting() const;
 
             void sellItem(MyGUI::Widget* sender, int count);
             void dragItem(MyGUI::Widget* sender, int count);
@@ -114,7 +123,6 @@ namespace MWGui
             void onFilterChanged(MyGUI::Widget* _sender);
             void onAvatarClicked(MyGUI::Widget* _sender);
             void onPinToggled();
-            void onTitleDoubleClicked();
 
             void updateEncumbranceBar();
             void notifyContentChanged();

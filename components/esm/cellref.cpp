@@ -1,6 +1,6 @@
 #include "cellref.hpp"
 
-#include <iostream>
+#include <components/debug/debuglog.hpp>
 
 #include "esmreader.hpp"
 #include "esmwriter.hpp"
@@ -48,9 +48,7 @@ void ESM::CellRef::loadId (ESMReader& esm, bool wideRefNum)
     mRefID = esm.getHNOString ("NAME");
     if (mRefID.empty())
     {
-        std::ios::fmtflags f(std::cerr.flags());
-        std::cerr << "Warning: got CellRef with empty RefId in " << esm.getName() << " 0x" << std::hex << esm.getFileOffset() << std::endl;
-        std::cerr.flags(f);
+        Log(Debug::Warning) << "Warning: got CellRef with empty RefId in " << esm.getName() << " 0x" << std::hex << esm.getFileOffset();
     }
 }
 
@@ -126,6 +124,9 @@ void ESM::CellRef::loadData(ESMReader &esm, bool &isDeleted)
                 break;
         }
     }
+
+    if (mLockLevel == 0 && !mKey.empty())
+        mLockLevel = UnbreakableLock;
 }
 
 void ESM::CellRef::save (ESMWriter &esm, bool wideRefNum, bool inInventory, bool isDeleted) const
@@ -173,10 +174,10 @@ void ESM::CellRef::save (ESMWriter &esm, bool wideRefNum, bool inInventory, bool
     }
 
     if (!inInventory)
+    {
         esm.writeHNOCString ("KNAM", mKey);
-
-    if (!inInventory)
         esm.writeHNOCString ("TNAM", mTrap);
+    }
 
     if (mReferenceBlocked != -1)
         esm.writeHNT("UNAM", mReferenceBlocked);
@@ -188,7 +189,7 @@ void ESM::CellRef::save (ESMWriter &esm, bool wideRefNum, bool inInventory, bool
 void ESM::CellRef::blank()
 {
     mRefNum.unset();
-    mRefID.clear();    
+    mRefID.clear();
     mScale = 1;
     mOwner.clear();
     mGlobalVariable.clear();
@@ -205,7 +206,7 @@ void ESM::CellRef::blank()
     mTrap.clear();
     mReferenceBlocked = -1;
     mTeleport = false;
-    
+
     for (int i=0; i<3; ++i)
     {
         mDoorDest.pos[i] = 0;

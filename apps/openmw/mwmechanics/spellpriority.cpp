@@ -1,7 +1,9 @@
 #include "spellpriority.hpp"
+#include "weaponpriority.hpp"
 
 #include <components/esm/loadench.hpp>
 #include <components/esm/loadmgef.hpp>
+#include <components/esm/loadspel.hpp>
 
 #include "../mwbase/environment.hpp"
 #include "../mwbase/world.hpp"
@@ -10,12 +12,10 @@
 #include "../mwworld/class.hpp"
 #include "../mwworld/esmstore.hpp"
 #include "../mwworld/inventorystore.hpp"
-#include "../mwworld/actionequip.hpp"
 #include "../mwworld/cellstore.hpp"
 
-#include "npcstats.hpp"
+#include "creaturestats.hpp"
 #include "spellcasting.hpp"
-#include "combat.hpp"
 
 namespace
 {
@@ -170,7 +170,7 @@ namespace MWMechanics
 
             float rating = rateEffects(enchantment->mEffects, actor, enemy);
 
-            rating *= 2; // prefer rechargable magic items over spells
+            rating *= 1.25f; // prefer rechargable magic items over spells
             return rating;
         }
 
@@ -231,20 +231,59 @@ namespace MWMechanics
         case ESM::MagicEffect::CommandHumanoid:
             return 0.f;
 
+        case ESM::MagicEffect::Blind:
+            {
+                if (enemy.isEmpty())
+                    return 0.f;
+
+                const CreatureStats& stats = enemy.getClass().getCreatureStats(enemy);
+
+                // Enemy can't attack
+                if (stats.isParalyzed() || stats.getKnockedDown())
+                    return 0.f;
+
+                // Enemy doesn't attack
+                if (stats.getDrawState() != MWMechanics::DrawState_Weapon)
+                    return 0.f;
+
+                break;
+            }
+
         case ESM::MagicEffect::Sound:
             {
                 if (enemy.isEmpty())
                     return 0.f;
 
-                // there is no need to cast sound if enemy is not able to cast spells
-                CreatureStats& stats = enemy.getClass().getCreatureStats(enemy);
+                const CreatureStats& stats = enemy.getClass().getCreatureStats(enemy);
 
+                // Enemy can't cast spells
                 if (stats.getMagicEffects().get(ESM::MagicEffect::Silence).getMagnitude() > 0)
                     return 0.f;
 
-                if (stats.getMagicEffects().get(ESM::MagicEffect::Paralyze).getMagnitude() > 0)
+                if (stats.isParalyzed() || stats.getKnockedDown())
                     return 0.f;
 
+                // Enemy doesn't cast spells
+                if (stats.getDrawState() != MWMechanics::DrawState_Spell)
+                    return 0.f;
+
+                break;
+            }
+
+        case ESM::MagicEffect::Silence:
+            {
+                if (enemy.isEmpty())
+                    return 0.f;
+
+                const CreatureStats& stats = enemy.getClass().getCreatureStats(enemy);
+
+                // Enemy can't cast spells
+                if (stats.isParalyzed() || stats.getKnockedDown())
+                    return 0.f;
+
+                // Enemy doesn't cast spells
+                if (stats.getDrawState() != MWMechanics::DrawState_Spell)
+                    return 0.f;
                 break;
             }
 
@@ -327,11 +366,20 @@ namespace MWMechanics
                 if (race->mData.mFlags & ESM::Race::Beast)
                     return 0.f;
             }
-            // Intended fall-through
+            else
+                return 0.f;
+
+            break;
         // Creatures can not wear armor
         case ESM::MagicEffect::BoundCuirass:
         case ESM::MagicEffect::BoundGloves:
             if (!actor.getClass().isNpc())
+                return 0.f;
+            break;
+
+        case ESM::MagicEffect::BoundLongbow:
+            // AI should not summon the bow if there is no suitable ammo.
+            if (rateAmmo(actor, enemy, ESM::Weapon::Arrow) <= 0.f)
                 return 0.f;
             break;
 
@@ -343,9 +391,10 @@ namespace MWMechanics
                 int priority = 1;
                 if (effect.mEffectID == ESM::MagicEffect::RestoreHealth)
                     priority = 10;
-                const DynamicStat<float>& current = actor.getClass().getCreatureStats(actor).
-                        getDynamic(effect.mEffectID - ESM::MagicEffect::RestoreHealth);
-                float toHeal = (effect.mMagnMin + effect.mMagnMax)/2.f * effect.mDuration;
+                const MWMechanics::CreatureStats& stats = actor.getClass().getCreatureStats(actor);
+                const DynamicStat<float>& current = stats.getDynamic(effect.mEffectID - ESM::MagicEffect::RestoreHealth);
+                const float magnitude = (effect.mMagnMin + effect.mMagnMax)/2.f;
+                const float toHeal = magnitude * effect.mDuration;
                 // Effect doesn't heal more than we need, *or* we are below 1/2 health
                 if (current.getModified() - current.getCurrent() > toHeal
                         || current.getCurrent() < current.getModified()*0.5)
@@ -488,7 +537,7 @@ namespace MWMechanics
         case ESM::MagicEffect::DrainSkill:
             if (enemy.isEmpty() || !enemy.getClass().isNpc())
                 return 0.f;
-            if (enemy.getClass().getNpcStats(enemy).getSkill(effect.mSkill).getModified() <= 0)
+            if (enemy.getClass().getSkill(enemy, effect.mSkill) <= 0)
                 return 0.f;
             break;
 
@@ -505,8 +554,6 @@ namespace MWMechanics
                 return 0.f;
         }
 
-        const ESM::MagicEffect* magicEffect = MWBase::Environment::get().getWorld()->getStore().get<ESM::MagicEffect>().find(effect.mEffectID);
-
         // Underwater casting not possible
         if (effect.mRange == ESM::RT_Target)
         {
@@ -520,6 +567,7 @@ namespace MWMechanics
                 return 0.f;
         }
 
+        const ESM::MagicEffect* magicEffect = MWBase::Environment::get().getWorld()->getStore().get<ESM::MagicEffect>().find(effect.mEffectID);
         if (magicEffect->mData.mFlags & ESM::MagicEffect::Harmful)
         {
             rating *= -1.f;
@@ -555,7 +603,7 @@ namespace MWMechanics
             }
         }
 
-        rating *= calcEffectCost(effect);
+        rating *= calcEffectCost(effect, magicEffect);
 
         // Currently treating all "on target" or "on touch" effects to target the enemy actor.
         // Combat AI is egoistic, so doesn't consider applying positive effects to friendly actors.
@@ -568,13 +616,19 @@ namespace MWMechanics
     float rateEffects(const ESM::EffectList &list, const MWWorld::Ptr& actor, const MWWorld::Ptr& enemy)
     {
         // NOTE: enemy may be empty
+
         float rating = 0.f;
+        float ratingMult = 1.f; // NB: this multiplier is applied to the effect rating, not the final rating
+
+        const MWWorld::Store<ESM::GameSetting>& gmst = MWBase::Environment::get().getWorld()->getStore().get<ESM::GameSetting>();
+        static const float fAIMagicSpellMult = gmst.find("fAIMagicSpellMult")->mValue.getFloat();
+        static const float fAIRangeMagicSpellMult = gmst.find("fAIRangeMagicSpellMult")->mValue.getFloat();
+
         for (std::vector<ESM::ENAMstruct>::const_iterator it = list.mList.begin(); it != list.mList.end(); ++it)
         {
-            rating += rateEffect(*it, actor, enemy);
+            ratingMult = (it->mRange == ESM::RT_Target) ? fAIRangeMagicSpellMult : fAIMagicSpellMult;
 
-            if (it->mRange == ESM::RT_Target)
-                rating *= 1.5f;
+            rating += rateEffect(*it, actor, enemy) * ratingMult;
         }
         return rating;
     }
@@ -583,8 +637,8 @@ namespace MWMechanics
     {
         const MWWorld::Store<ESM::GameSetting>& gmst = MWBase::Environment::get().getWorld()->getStore().get<ESM::GameSetting>();
 
-        static const float fAIMagicSpellMult = gmst.find("fAIMagicSpellMult")->getFloat();
-        static const float fAIRangeMagicSpellMult = gmst.find("fAIRangeMagicSpellMult")->getFloat();
+        static const float fAIMagicSpellMult = gmst.find("fAIMagicSpellMult")->mValue.getFloat();
+        static const float fAIRangeMagicSpellMult = gmst.find("fAIRangeMagicSpellMult")->mValue.getFloat();
 
         float mult = fAIMagicSpellMult;
 

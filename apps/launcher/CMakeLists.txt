@@ -1,12 +1,15 @@
 set(LAUNCHER
     datafilespage.cpp
     graphicspage.cpp
+    sdlinit.cpp
     main.cpp
     maindialog.cpp
     playpage.cpp
     textslotmsgbox.cpp
     settingspage.cpp
+    advancedpage.cpp
 
+    utils/cellnameloader.cpp
     utils/profilescombobox.cpp
     utils/textinputdialog.cpp
     utils/lineedit.cpp
@@ -17,11 +20,14 @@ set(LAUNCHER
 set(LAUNCHER_HEADER
     datafilespage.hpp
     graphicspage.hpp
+    sdlinit.hpp
     maindialog.hpp
     playpage.hpp
     textslotmsgbox.hpp
     settingspage.hpp
+    advancedpage.hpp
 
+    utils/cellnameloader.hpp
     utils/profilescombobox.hpp
     utils/textinputdialog.hpp
     utils/lineedit.hpp
@@ -35,7 +41,9 @@ set(LAUNCHER_HEADER_MOC
     playpage.hpp
     textslotmsgbox.hpp
     settingspage.hpp
+    advancedpage.hpp
 
+    utils/cellnameloader.hpp
     utils/textinputdialog.hpp
     utils/profilescombobox.hpp
     utils/lineedit.hpp
@@ -49,6 +57,7 @@ set(LAUNCHER_UI
     ${CMAKE_SOURCE_DIR}/files/ui/playpage.ui
     ${CMAKE_SOURCE_DIR}/files/ui/contentselector.ui
     ${CMAKE_SOURCE_DIR}/files/ui/settingspage.ui
+    ${CMAKE_SOURCE_DIR}/files/ui/advancedpage.ui
 )
 
 source_group(launcher FILES ${LAUNCHER} ${LAUNCHER_HEADER})
@@ -102,7 +111,7 @@ if (DESIRED_QT_VERSION MATCHES 4)
         target_link_libraries(openmw-launcher ${QT_QTMAIN_LIBRARY})
     endif(WIN32)
 else()
-    qt5_use_modules(openmw-launcher Widgets Core)
+    target_link_libraries(openmw-launcher Qt5::Widgets Qt5::Core)
 endif()
 
 if (BUILD_WITH_CODE_COVERAGE)

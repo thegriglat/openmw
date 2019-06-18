@@ -19,22 +19,38 @@ namespace AiSequence
 
 namespace MWMechanics
 {
+    struct AiFollowStorage : AiTemporaryBase
+    {
+        float mTimer;
+        bool mMoving;
+        float mTargetAngleRadians;
+        bool mTurnActorToTarget;
+
+        AiFollowStorage() :
+            mTimer(0.f),
+            mMoving(false),
+            mTargetAngleRadians(0.f),
+            mTurnActorToTarget(false)
+        {}
+    };
+
     /// \brief AiPackage for an actor to follow another actor/the PC
     /** The AI will follow the target until a condition (time, or position) are set. Both can be disabled to cause the actor to follow the other indefinitely
     **/
     class AiFollow : public AiPackage
     {
         public:
+            AiFollow(const std::string &actorId, float duration, float x, float y, float z);
+            AiFollow(const std::string &actorId, const std::string &CellId, float duration, float x, float y, float z);
             /// Follow Actor for duration or until you arrive at a world position
-            AiFollow(const std::string &ActorId,float duration, float X, float Y, float Z);
+            AiFollow(const MWWorld::Ptr& actor, float duration, float X, float Y, float Z);
             /// Follow Actor for duration or until you arrive at a position in a cell
-            AiFollow(const std::string &ActorId,const std::string &CellId,float duration, float X, float Y, float Z);
+            AiFollow(const MWWorld::Ptr& actor, const std::string &CellId, float duration, float X, float Y, float Z);
             /// Follow Actor indefinitively
-            AiFollow(const std::string &ActorId, bool commanded=false);
+            AiFollow(const MWWorld::Ptr& actor, bool commanded=false);
 
             AiFollow(const ESM::AiSequence::AiFollow* follow);
 
-            MWWorld::Ptr getTarget() const;
             virtual bool sideWithTarget() const { return true; }
             virtual bool followTargetThroughDoors() const { return true; }
             virtual bool shouldCancelPreviousAi() const { return !mCommanded; }
@@ -66,8 +82,6 @@ namespace MWMechanics
             float mX;
             float mY;
             float mZ;
-            std::string mActorRefId;
-            mutable int mActorId;
             std::string mCellId;
             bool mActive; // have we spotted the target?
             int mFollowIndex;

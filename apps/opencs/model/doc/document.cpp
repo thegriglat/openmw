@@ -2,7 +2,6 @@
 
 #include <cassert>
 #include <fstream>
-#include <iostream>
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -12,6 +11,8 @@
 #ifndef Q_MOC_RUN
 #include <components/files/configurationmanager.hpp>
 #endif
+
+#include <components/debug/debuglog.hpp>
 
 void CSMDoc::Document::addGmsts()
 {
@@ -272,18 +273,16 @@ void CSMDoc::Document::createBase()
 CSMDoc::Document::Document (const Files::ConfigurationManager& configuration,
     const std::vector< boost::filesystem::path >& files,bool new_,
     const boost::filesystem::path& savePath, const boost::filesystem::path& resDir,
-    const Fallback::Map* fallback,
-    ToUTF8::FromType encoding,
-    const std::vector<std::string>& blacklistedScripts,
+    ToUTF8::FromType encoding, const std::vector<std::string>& blacklistedScripts,
     bool fsStrict, const Files::PathContainer& dataPaths, const std::vector<std::string>& archives)
-: mSavePath (savePath), mContentFiles (files), mNew (new_), mData (encoding, fsStrict, dataPaths, archives, fallback, resDir),
+: mSavePath (savePath), mContentFiles (files), mNew (new_), mData (encoding, fsStrict, dataPaths, archives, resDir),
   mTools (*this, encoding),
   mProjectPath ((configuration.getUserDataPath() / "projects") /
   (savePath.filename().string() + ".project")),
   mSavingOperation (*this, mProjectPath, encoding),
   mSaving (&mSavingOperation),
-  mResDir(resDir), mFallbackMap(fallback),
-  mRunner (mProjectPath), mDirty (false), mIdCompletionManager(mData)
+  mResDir(resDir), mRunner (mProjectPath),
+  mDirty (false), mIdCompletionManager(mData)
 {
     if (mContentFiles.empty())
         throw std::runtime_error ("Empty content file sequence");
@@ -320,12 +319,13 @@ CSMDoc::Document::Document (const Files::ConfigurationManager& configuration,
     connect (&mUndoStack, SIGNAL (cleanChanged (bool)), this, SLOT (modificationStateChanged (bool)));
 
     connect (&mTools, SIGNAL (progress (int, int, int)), this, SLOT (progress (int, int, int)));
-    connect (&mTools, SIGNAL (done (int, bool)), this, SLOT (operationDone (int, bool)));
+    connect (&mTools, SIGNAL (done (int, bool)), this, SIGNAL (operationDone (int, bool)));
+    connect (&mTools, SIGNAL (done (int, bool)), this, SLOT (operationDone2 (int, bool)));
     connect (&mTools, SIGNAL (mergeDone (CSMDoc::Document*)),
             this, SIGNAL (mergeDone (CSMDoc::Document*)));
 
     connect (&mSaving, SIGNAL (progress (int, int, int)), this, SLOT (progress (int, int, int)));
-    connect (&mSaving, SIGNAL (done (int, bool)), this, SLOT (operationDone (int, bool)));
+    connect (&mSaving, SIGNAL (done (int, bool)), this, SLOT (operationDone2 (int, bool)));
 
     connect (
         &mSaving, SIGNAL (reportMessage (const CSMDoc::Message&, int)),
@@ -360,6 +360,11 @@ int CSMDoc::Document::getState() const
         state |= State_Locked | State_Operation | operations;
 
     return state;
+}
+
+const boost::filesystem::path& CSMDoc::Document::getResourceDir() const
+{
+    return mResDir;
 }
 
 const boost::filesystem::path& CSMDoc::Document::getSavePath() const
@@ -434,10 +439,10 @@ void CSMDoc::Document::modificationStateChanged (bool clean)
 void CSMDoc::Document::reportMessage (const CSMDoc::Message& message, int type)
 {
     /// \todo find a better way to get these messages to the user.
-    std::cout << message.mMessage << std::endl;
+    Log(Debug::Info) << message.mMessage;
 }
 
-void CSMDoc::Document::operationDone (int type, bool failed)
+void CSMDoc::Document::operationDone2 (int type, bool failed)
 {
     if (type==CSMDoc::State_Saving && !failed)
         mDirty = false;

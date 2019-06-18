@@ -1,5 +1,7 @@
 #include "companionwindow.hpp"
 
+#include <cmath>
+
 #include <MyGUI_InputManager.h>
 
 #include "../mwbase/environment.hpp"
@@ -35,8 +37,8 @@ namespace MWGui
 
 CompanionWindow::CompanionWindow(DragAndDrop *dragAndDrop, MessageBoxManager* manager)
     : WindowBase("openmw_companion_window.layout")
-    , mSortModel(NULL)
-    , mModel(NULL)
+    , mSortModel(nullptr)
+    , mModel(nullptr)
     , mSelectedItem(-1)
     , mDragAndDrop(dragAndDrop)
     , mMessageBoxManager(manager)
@@ -87,7 +89,7 @@ void CompanionWindow::onItemSelected(int index)
         dialog->eventOkClicked += MyGUI::newDelegate(this, &CompanionWindow::dragItem);
     }
     else
-        dragItem (NULL, count);
+        dragItem (nullptr, count);
 }
 
 void CompanionWindow::dragItem(MyGUI::Widget* sender, int count)
@@ -129,7 +131,7 @@ void CompanionWindow::updateEncumbranceBar()
         return;
     float capacity = mPtr.getClass().getCapacity(mPtr);
     float encumbrance = mPtr.getClass().getEncumbrance(mPtr);
-    mEncumbranceBar->setValue(static_cast<int>(encumbrance), static_cast<int>(capacity));
+    mEncumbranceBar->setValue(std::ceil(encumbrance), static_cast<int>(capacity));
 
     if (mModel && mModel->hasProfit(mPtr))
     {
@@ -177,9 +179,9 @@ void CompanionWindow::onReferenceUnavailable()
 void CompanionWindow::resetReference()
 {
     ReferenceInterface::resetReference();
-    mItemView->setModel(NULL);
-    mModel = NULL;
-    mSortModel = NULL;
+    mItemView->setModel(nullptr);
+    mModel = nullptr;
+    mSortModel = nullptr;
 }
 
 

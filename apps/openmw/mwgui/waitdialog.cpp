@@ -83,8 +83,15 @@ namespace MWGui
 
     void WaitDialog::setPtr(const MWWorld::Ptr &ptr)
     {
-        setCanRest(!ptr.isEmpty() || MWBase::Environment::get().getWorld ()->canRest () == 0);
+        setCanRest(!ptr.isEmpty() || MWBase::Environment::get().getWorld ()->canRest () == MWBase::World::Rest_Allowed);
 
+        if (ptr.isEmpty() && MWBase::Environment::get().getWorld ()->canRest() == MWBase::World::Rest_PlayerIsInAir)
+        {
+            // Resting in air is not allowed unless you're using a bed
+            MWBase::Environment::get().getWindowManager()->messageBox ("#{sNotifyMessage1}");
+            MWBase::Environment::get().getWindowManager()->removeGuiMode(GM_Rest);
+        }
+            
         if (mUntilHealedButton->getVisible())
             MWBase::Environment::get().getWindowManager()->setKeyFocusWidget(mUntilHealedButton);
         else
@@ -120,11 +127,16 @@ namespace MWGui
             MWBase::Environment::get().getWindowManager()->popGuiMode ();
         }
 
-        int canRest = MWBase::Environment::get().getWorld ()->canRest ();
+        MWBase::World::RestPermitted canRest = MWBase::Environment::get().getWorld ()->canRest ();
 
-        if (canRest == 2)
+        if (canRest == MWBase::World::Rest_EnemiesAreNearby)
         {
-            // resting underwater or mid-air not allowed
+            MWBase::Environment::get().getWindowManager()->messageBox("#{sNotifyMessage2}");
+            MWBase::Environment::get().getWindowManager()->popGuiMode ();
+        }
+        else if (canRest == MWBase::World::Rest_PlayerIsUnderwater)
+        {
+            // resting underwater not allowed
             MWBase::Environment::get().getWindowManager()->messageBox ("#{sNotifyMessage1}");
             MWBase::Environment::get().getWindowManager()->popGuiMode ();
         }
@@ -183,10 +195,10 @@ namespace MWGui
                 {
                     // figure out if player will be woken while sleeping
                     int x = Misc::Rng::rollDice(hoursToWait);
-                    float fSleepRandMod = world->getStore().get<ESM::GameSetting>().find("fSleepRandMod")->getFloat();
+                    float fSleepRandMod = world->getStore().get<ESM::GameSetting>().find("fSleepRandMod")->mValue.getFloat();
                     if (x < fSleepRandMod * hoursToWait)
                     {
-                        float fSleepRestMod = world->getStore().get<ESM::GameSetting>().find("fSleepRestMod")->getFloat();
+                        float fSleepRestMod = world->getStore().get<ESM::GameSetting>().find("fSleepRestMod")->mValue.getFloat();
                         int interruptAtHoursRemaining = int(fSleepRestMod * hoursToWait);
                         if (interruptAtHoursRemaining != 0)
                         {
@@ -227,7 +239,7 @@ namespace MWGui
     void WaitDialog::onWaitingProgressChanged(int cur, int total)
     {
         mProgressBar.setProgress(cur, total);
-        MWBase::Environment::get().getMechanicsManager()->rest(mSleeping);
+        MWBase::Environment::get().getMechanicsManager()->rest(1, mSleeping);
         MWBase::Environment::get().getWorld()->advanceTime(1);
 
         MWWorld::Ptr player = MWBase::Environment::get().getWorld()->getPlayerPtr();
@@ -252,7 +264,7 @@ namespace MWGui
         // trigger levelup if possible
         const MWWorld::Store<ESM::GameSetting> &gmst =
             MWBase::Environment::get().getWorld()->getStore().get<ESM::GameSetting>();
-        if (mSleeping && pcstats.getLevelProgress () >= gmst.find("iLevelUpTotal")->getInt())
+        if (mSleeping && pcstats.getLevelProgress () >= gmst.find("iLevelUpTotal")->mValue.getInteger())
         {
             MWBase::Environment::get().getWindowManager()->pushGuiMode (GM_Levelup);
         }
@@ -276,7 +288,7 @@ namespace MWGui
         mSleeping = canRest;
 
         Gui::Box* box = dynamic_cast<Gui::Box*>(mMainWidget);
-        if (box == NULL)
+        if (box == nullptr)
             throw std::runtime_error("main widget must be a box");
         box->notifyChildrenSizeChanged();
         center();
@@ -310,8 +322,10 @@ namespace MWGui
     void WaitDialog::wakeUp ()
     {
         mSleeping = false;
-        mTimeAdvancer.stop();
-        stopWaiting();
+        if (mInterruptAt != -1)
+            onWaitingInterrupted();
+        else
+            stopWaiting();
     }
 
 }

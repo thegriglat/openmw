@@ -32,6 +32,7 @@
 #include "gmstcheck.hpp"
 #include "topicinfocheck.hpp"
 #include "journalcheck.hpp"
+#include "enchantmentcheck.hpp"
 
 CSMDoc::OperationHolder *CSMTools::Tools::get (int type)
 {
@@ -61,12 +62,7 @@ CSMDoc::OperationHolder *CSMTools::Tools::getVerifier()
         connect (&mVerifier, SIGNAL (reportMessage (const CSMDoc::Message&, int)),
             this, SLOT (verifierMessage (const CSMDoc::Message&, int)));
 
-        std::vector<std::string> mandatoryIds; //  I want C++11, damn it!
-        mandatoryIds.push_back ("Day");
-        mandatoryIds.push_back ("DaysPassed");
-        mandatoryIds.push_back ("GameHour");
-        mandatoryIds.push_back ("Month");
-        mandatoryIds.push_back ("PCRace");
+        std::vector<std::string> mandatoryIds {"Day", "DaysPassed", "GameHour", "Month", "PCRace"};
 
         mVerifierOperation->appendStage (new MandatoryIdStage (mData.getGlobals(),
             CSMWorld::UniversalId (CSMWorld::UniversalId::Type_Globals), mandatoryIds));
@@ -79,15 +75,17 @@ CSMDoc::OperationHolder *CSMTools::Tools::getVerifier()
 
         mVerifierOperation->appendStage (new RaceCheckStage (mData.getRaces()));
 
-        mVerifierOperation->appendStage (new SoundCheckStage (mData.getSounds()));
+        mVerifierOperation->appendStage (new SoundCheckStage (mData.getSounds(), mData.getResources (CSMWorld::UniversalId::Type_SoundsRes)));
 
         mVerifierOperation->appendStage (new RegionCheckStage (mData.getRegions()));
 
-        mVerifierOperation->appendStage (new BirthsignCheckStage (mData.getBirthsigns()));
+        mVerifierOperation->appendStage (new BirthsignCheckStage (mData.getBirthsigns(), mData.getResources (CSMWorld::UniversalId::Type_Textures)));
 
         mVerifierOperation->appendStage (new SpellCheckStage (mData.getSpells()));
 
-        mVerifierOperation->appendStage (new ReferenceableCheckStage (mData.getReferenceables().getDataSet(), mData.getRaces(), mData.getClasses(), mData.getFactions(), mData.getScripts()));
+        mVerifierOperation->appendStage (new ReferenceableCheckStage (mData.getReferenceables().getDataSet(), mData.getRaces(), mData.getClasses(), mData.getFactions(), mData.getScripts(), 
+                                                                      mData.getResources (CSMWorld::UniversalId::Type_Meshes), mData.getResources (CSMWorld::UniversalId::Type_Icons),
+                                                                      mData.getBodyParts()));
 
         mVerifierOperation->appendStage (new ReferenceCheckStage(mData.getReferences(), mData.getReferenceables(), mData.getCells(), mData.getFactions()));
 
@@ -130,6 +128,8 @@ CSMDoc::OperationHolder *CSMTools::Tools::getVerifier()
                                                                   mData.getResources (CSMWorld::UniversalId::Type_SoundsRes)));
 
         mVerifierOperation->appendStage (new JournalCheckStage(mData.getJournals(), mData.getJournalInfos()));
+
+        mVerifierOperation->appendStage (new EnchantmentCheckStage(mData.getEnchantments()));
 
         mVerifier.setOperation (mVerifierOperation);
     }

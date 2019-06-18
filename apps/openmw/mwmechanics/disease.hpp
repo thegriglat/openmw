@@ -28,7 +28,7 @@ namespace MWMechanics
 
         float fDiseaseXferChance =
                 MWBase::Environment::get().getWorld()->getStore().get<ESM::GameSetting>().find(
-                    "fDiseaseXferChance")->getFloat();
+                    "fDiseaseXferChance")->mValue.getFloat();
 
         MagicEffects& actorEffects = actor.getClass().getCreatureStats(actor).getMagicEffects();
 
@@ -57,11 +57,11 @@ namespace MWMechanics
             {
                 // Contracted disease!
                 actor.getClass().getCreatureStats(actor).getSpells().add(it->first);
+                MWBase::Environment::get().getWorld()->applyLoopingParticles(actor);
 
                 std::string msg = "sMagicContractDisease";
-                msg = MWBase::Environment::get().getWorld()->getStore().get<ESM::GameSetting>().find(msg)->getString();
-                if (msg.find("%s") != std::string::npos)
-                    msg.replace(msg.find("%s"), 2, spell->mName);
+                msg = MWBase::Environment::get().getWorld()->getStore().get<ESM::GameSetting>().find(msg)->mValue.getString();
+                msg = Misc::StringUtils::format(msg, spell->mName);
                 MWBase::Environment::get().getWindowManager()->messageBox(msg);
             }
         }

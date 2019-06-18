@@ -16,8 +16,8 @@ namespace MWMechanics
     bool proximityToDoor(const MWWorld::Ptr& actor, float minDist);
 
     /// Returns door pointer within range. No guarantee is given as to which one
-    /** \return Pointer to the door, or NULL if none exists **/
-    MWWorld::Ptr getNearbyDoor(const MWWorld::Ptr& actor, float minDist);
+    /** \return Pointer to the door, or empty pointer if none exists **/
+    const MWWorld::Ptr getNearbyDoor(const MWWorld::Ptr& actor, float minDist);
 
     class ObstacleCheck
     {
@@ -27,15 +27,13 @@ namespace MWMechanics
             // Clear the timers and set the state machine to default
             void clear();
 
-            bool isNormalState() const;
             bool isEvading() const;
 
-            // Returns true if there is an obstacle and an evasive action
-            // should be taken
-            bool check(const MWWorld::Ptr& actor, float duration, float scaleMinimumDistance = 1.0f);
+            // Updates internal state, call each frame for moving actor
+            void update(const MWWorld::Ptr& actor, float duration);
 
             // change direction to try to fix "stuck" actor
-            void takeEvasiveAction(MWMechanics::Movement& actorMovement);
+            void takeEvasiveAction(MWMechanics::Movement& actorMovement) const;
 
         private:
 

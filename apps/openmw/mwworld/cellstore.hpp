@@ -64,7 +64,7 @@ namespace MWWorld
 
             // Even though fog actually belongs to the player and not cells,
             // it makes sense to store it here since we need it once for each cell.
-            // Note this is NULL until the cell is explored to save some memory
+            // Note this is nullptr until the cell is explored to save some memory
             std::shared_ptr<ESM::FogState> mFogState;
 
             const ESM::Cell *mCell;
@@ -183,6 +183,8 @@ namespace MWWorld
             /// @return updated MWWorld::Ptr with the new CellStore pointer set.
             MWWorld::Ptr moveTo(const MWWorld::Ptr& object, MWWorld::CellStore* cellToMoveTo);
 
+            void rest(double hours);
+
             /// Make a copy of the given object and insert it into this cell.
             /// @note If you get a linker error here, this means the given type can not be inserted into a cell.
             /// The supported types are defined at the bottom of this file.
@@ -231,6 +233,8 @@ namespace MWWorld
 
             float getWaterLevel() const;
 
+            bool movedHere(const MWWorld::Ptr& ptr) const;
+
             void setWaterLevel (float level);
 
             void setFog (ESM::FogState* fog);
@@ -238,7 +242,7 @@ namespace MWWorld
 
             ESM::FogState* getFog () const;
 
-            int count() const;
+            std::size_t count() const;
             ///< Return total number of references, including deleted ones.
 
             void load ();
@@ -281,7 +285,7 @@ namespace MWWorld
             /// \attention This function also lists deleted (count 0) objects!
             /// \return Iteration completed?
             template<class Visitor>
-            bool forEachConst (Visitor& visitor) const
+            bool forEachConst (Visitor&& visitor) const
             {
                 if (mState != State_Loaded)
                     return false;
@@ -365,7 +369,7 @@ namespace MWWorld
             struct GetCellStoreCallback
             {
             public:
-                ///@note must return NULL if the cell is not found
+                ///@note must return nullptr if the cell is not found
                 virtual CellStore* getCellStore(const ESM::CellId& cellId) = 0;
             };
 

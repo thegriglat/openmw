@@ -20,11 +20,13 @@ namespace MWGui
         std::string mCostColumn; // Cost/chance or Cost/charge
         std::string mId; // Item ID or spell ID
         MWWorld::Ptr mItem; // Only for Type_EnchantedItem
+        int mCount; // Only for Type_EnchantedItem
         bool mSelected; // Is this the currently selected spell/item (only one can be selected at a time)
         bool mActive; // (Items only) is the item equipped?
 
         Spell()
             : mType(Type_Spell)
+            , mCount(0)
             , mSelected(false)
             , mActive(false)
         {
@@ -35,6 +37,7 @@ namespace MWGui
     class SpellModel
     {
     public:
+        SpellModel(const MWWorld::Ptr& actor, const std::string& filter);
         SpellModel(const MWWorld::Ptr& actor);
 
         typedef int ModelIndex;
@@ -45,11 +48,15 @@ namespace MWGui
         ///< throws for invalid index
 
         size_t getItemCount() const;
+        ModelIndex getSelectedIndex() const;
+        ///< returns -1 if nothing is selected
 
     private:
         MWWorld::Ptr mActor;
 
         std::vector<Spell> mSpells;
+
+        std::string mFilter;
     };
 
 }

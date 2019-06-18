@@ -168,7 +168,7 @@ QVariant ContentSelectorModel::ContentModel::data(const QModelIndex &index, int 
     case Qt::DisplayRole:
     {
         if (column >=0 && column <=EsmFile::FileProperty_GameFile)
-            return file->fileProperty(static_cast<const EsmFile::FileProperty>(column));
+            return file->fileProperty(static_cast<EsmFile::FileProperty>(column));
 
         return QVariant();
     }
@@ -428,7 +428,7 @@ void ContentSelectorModel::ContentModel::addFiles(const QString &path)
     {
         QFileInfo info(dir.absoluteFilePath(path2));
 
-        if (item(info.absoluteFilePath()) != 0)
+        if (item(info.fileName()))
             continue;
 
         try {
@@ -474,9 +474,13 @@ void ContentSelectorModel::ContentModel::addFiles(const QString &path)
 
 void ContentSelectorModel::ContentModel::clearFiles()
 {
-    beginRemoveRows(QModelIndex(), 0, mFiles.count()-1);
-    mFiles.clear();
-    endRemoveRows();
+    const int filesCount = mFiles.count();
+
+    if (filesCount > 0) {
+        beginRemoveRows(QModelIndex(), 0, filesCount - 1);
+        mFiles.clear();
+        endRemoveRows();
+    }
 }
 
 QStringList ContentSelectorModel::ContentModel::gameFiles() const
@@ -512,7 +516,9 @@ void ContentSelectorModel::ContentModel::sortFiles()
             //dependencies appear.
             for (int j = i + 1; j < fileCount; j++)
             {
-                if (gamefiles.contains(mFiles.at(j)->fileName(), Qt::CaseInsensitive))
+                if (gamefiles.contains(mFiles.at(j)->fileName(), Qt::CaseInsensitive)
+                 || (!mFiles.at(i)->isGameFile() && gamefiles.isEmpty()
+                 && mFiles.at(j)->fileName().compare("Morrowind.esm", Qt::CaseInsensitive) == 0)) // Hack: implicit dependency on Morrowind.esm for dependency-less files
                 {
                         mFiles.move(j, i);
 

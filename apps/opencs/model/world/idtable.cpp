@@ -84,15 +84,28 @@ bool CSMWorld::IdTable::setData (const QModelIndex &index, const QVariant &value
     if (mIdCollection->getColumn (index.column()).isEditable() && role==Qt::EditRole)
     {
         mIdCollection->setData (index.row(), index.column(), value);
-        emit dataChanged(index, index);
 
-        // Modifying a value can also change the Modified status of a record.
         int stateColumn = searchColumnIndex(Columns::ColumnId_Modification);
         if (stateColumn != -1)
         {
-            QModelIndex stateIndex = this->index(index.row(), stateColumn);
-            emit dataChanged(stateIndex, stateIndex);
-        }
+            if (index.column() == stateColumn)
+            {
+                // modifying the state column can modify other values. we need to tell
+                // views that the whole row has changed.
+
+                emit dataChanged(this->index(index.row(), 0),
+                                 this->index(index.row(), columnCount(index.parent())));
+
+            } else
+            {
+                emit dataChanged(index, index);
+
+                // Modifying a value can also change the Modified status of a record.
+                QModelIndex stateIndex = this->index(index.row(), stateColumn);
+                emit dataChanged(stateIndex, stateIndex);
+            }
+        } else
+            emit dataChanged(index, index);
 
         return true;
     }
@@ -208,7 +221,11 @@ std::string CSMWorld::IdTable::getId(int row) const
 ///This method can return only indexes to the top level table cells
 QModelIndex CSMWorld::IdTable::getModelIndex (const std::string& id, int column) const
 {
-    return index(mIdCollection->getIndex (id), column);
+    int row = mIdCollection->searchId (id);
+    if (row != -1)
+        return index(row, column);
+
+    return QModelIndex();
 }
 
 void CSMWorld::IdTable::setRecord (const std::string& id, const RecordBase& record, CSMWorld::UniversalId::Type type)

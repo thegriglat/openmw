@@ -66,6 +66,9 @@ namespace CSVDoc
 
             void closeEvent (QCloseEvent *event);
 
+            QAction* createMenuEntry(CSMWorld::UniversalId::Type type, QMenu* menu, const char* shortcutName);
+            QAction* createMenuEntry(const std::string& title, const std::string& iconName, QMenu* menu, const char* shortcutName);
+
             void setupFileMenu();
 
             void setupEditMenu();
@@ -81,6 +84,8 @@ namespace CSVDoc
             void setupAssetsMenu();
 
             void setupDebugMenu();
+
+            void setupHelpMenu();
 
             void setupUi();
 
@@ -146,17 +151,25 @@ namespace CSVDoc
             void updateTitle();
 
             // called when subviews are added or removed
-            void updateSubViewIndices (SubView *view = NULL);
+            void updateSubViewIndices (SubView *view = nullptr);
 
         private slots:
 
             void settingChanged (const CSMPrefs::Setting *setting);
+
+            void undoActionChanged();
+
+            void redoActionChanged();
 
             void newView();
 
             void save();
 
             void exit();
+
+            void infoAbout();
+
+            void infoAboutQt();
 
             void verify();
 

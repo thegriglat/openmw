@@ -37,6 +37,42 @@ TEST(EsmFixedString, operator__eq_ne)
         EXPECT_TRUE(name == ss);
     }
 }
+TEST(EsmFixedString, operator__eq_ne_const)
+{
+    {
+        SCOPED_TRACE("asdc == asdc (const)");
+        ESM::NAME name;
+        name.assign("asdc");
+        const char s[4] = { 'a', 's', 'd', 'c' };
+        std::string ss(s, 4);
+
+        EXPECT_TRUE(name == s);
+        EXPECT_TRUE(name == ss.c_str());
+        EXPECT_TRUE(name == ss);
+    }
+    {
+        SCOPED_TRACE("asdc == asdcx (const)");
+        ESM::NAME name;
+        name.assign("asdc");
+        const char s[5] = { 'a', 's', 'd', 'c', 'x' };
+        std::string ss(s, 5);
+
+        EXPECT_TRUE(name != s);
+        EXPECT_TRUE(name != ss.c_str());
+        EXPECT_TRUE(name != ss);
+    }
+    {
+        SCOPED_TRACE("asdc == asdc[NULL] (const)");
+        ESM::NAME name;
+        name.assign("asdc");
+        const char s[5] = { 'a', 's', 'd', 'c', '\0' };
+        std::string ss(s, 5);
+
+        EXPECT_TRUE(name == s);
+        EXPECT_TRUE(name == ss.c_str());
+        EXPECT_TRUE(name == ss);
+    }
+}
 
 TEST(EsmFixedString, empty_strings)
 {
@@ -64,12 +100,10 @@ TEST(EsmFixedString, struct_size)
     ASSERT_EQ(256, sizeof(ESM::NAME256));
 }
 
-TEST(EsmFixedString, DISABLED_is_pod)
+TEST(EsmFixedString, is_pod)
 {
-    /* TODO: enable in C++11
-     * ASSERT_TRUE(std::is_pod<ESM::NAME>::value);
-     * ASSERT_TRUE(std::is_pod<ESM::NAME32>::value);
-     * ASSERT_TRUE(std::is_pod<ESM::NAME64>::value);
-     * ASSERT_TRUE(std::is_pod<ESM::NAME256>::value);
-     */
+     ASSERT_TRUE(std::is_pod<ESM::NAME>::value);
+     ASSERT_TRUE(std::is_pod<ESM::NAME32>::value);
+     ASSERT_TRUE(std::is_pod<ESM::NAME64>::value);
+     ASSERT_TRUE(std::is_pod<ESM::NAME256>::value);
 }

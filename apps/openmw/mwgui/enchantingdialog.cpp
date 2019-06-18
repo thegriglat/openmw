@@ -9,7 +9,10 @@
 #include <components/widgets/list.hpp>
 #include <components/settings/settings.hpp>
 
+#include "../mwbase/environment.hpp"
 #include "../mwbase/mechanicsmanager.hpp"
+#include "../mwbase/world.hpp"
+
 #include "../mwworld/class.hpp"
 #include "../mwworld/containerstore.hpp"
 #include "../mwworld/esmstore.hpp"
@@ -28,7 +31,7 @@ namespace MWGui
     EnchantingDialog::EnchantingDialog()
         : WindowBase("openmw_enchanting_dialog.layout")
         , EffectEditorBase(EffectEditorBase::Enchanting)
-        , mItemSelectionDialog(NULL)
+        , mItemSelectionDialog(nullptr)
     {
         getWidget(mName, "NameEdit");
         getWidget(mCancelButton, "CancelButton");
@@ -104,20 +107,11 @@ namespace MWGui
 
     void EnchantingDialog::updateLabels()
     {
-        std::stringstream enchantCost;
-        enchantCost << std::setprecision(1) << std::fixed << mEnchanting.getEnchantPoints();
-        mEnchantmentPoints->setCaption(enchantCost.str() + " / " + MyGUI::utility::toString(mEnchanting.getMaxEnchantValue()));
-
-        mCharge->setCaption(MyGUI::utility::toString(mEnchanting.getGemCharge()));
-
-        int successChance = int(mEnchanting.getEnchantChance());
-        mSuccessChance->setCaption(MyGUI::utility::toString(std::max(0, successChance)));
-
-        std::stringstream castCost;
-        castCost << mEnchanting.getEffectiveCastCost();
-        mCastCost->setCaption(castCost.str());
-
-        mPrice->setCaption(MyGUI::utility::toString(mEnchanting.getEnchantPrice()));
+        mEnchantmentPoints->setCaption(std::to_string(static_cast<int>(mEnchanting.getEnchantPoints(false))) + " / " + std::to_string(mEnchanting.getMaxEnchantValue()));
+        mCharge->setCaption(std::to_string(mEnchanting.getGemCharge()));
+        mSuccessChance->setCaption(std::to_string(std::max(0, std::min(100, mEnchanting.getEnchantChance()))));
+        mCastCost->setCaption(std::to_string(mEnchanting.getEffectiveCastCost()));
+        mPrice->setCaption(std::to_string(mEnchanting.getEnchantPrice()));
 
         switch(mEnchanting.getCastStyle())
         {
@@ -288,6 +282,9 @@ namespace MWGui
     void EnchantingDialog::onAccept(MyGUI::EditBox *sender)
     {
         onBuyButtonClicked(sender);
+
+        // To do not spam onAccept() again and again
+        MWBase::Environment::get().getWindowManager()->injectKeyRelease(MyGUI::KeyCode::None);
     }
 
     void EnchantingDialog::onBuyButtonClicked(MyGUI::Widget* sender)
@@ -316,7 +313,7 @@ namespace MWGui
             return;
         }
 
-        if (mEnchanting.getEnchantPoints() > mEnchanting.getMaxEnchantValue())
+        if (static_cast<int>(mEnchanting.getEnchantPoints(false)) > mEnchanting.getMaxEnchantValue())
         {
             MWBase::Environment::get().getWindowManager()->messageBox ("#{sNotifyMessage29}");
             return;
@@ -339,12 +336,10 @@ namespace MWGui
             for (int i=0; i<2; ++i)
             {
                 MWWorld::Ptr item = (i == 0) ? mEnchanting.getOldItem() : mEnchanting.getGem();
-                if (MWBase::Environment::get().getMechanicsManager()->isItemStolenFrom(item.getCellRef().getRefId(),
-                                                                                       mPtr.getCellRef().getRefId()))
+                if (MWBase::Environment::get().getMechanicsManager()->isItemStolenFrom(item.getCellRef().getRefId(), mPtr))
                 {
-                    std::string msg = MWBase::Environment::get().getWorld()->getStore().get<ESM::GameSetting>().find("sNotifyMessage49")->getString();
-                    if (msg.find("%s") != std::string::npos)
-                        msg.replace(msg.find("%s"), 2, item.getClass().getName(item));
+                    std::string msg = MWBase::Environment::get().getWorld()->getStore().get<ESM::GameSetting>().find("sNotifyMessage49")->mValue.getString();
+                    msg = Misc::StringUtils::format(msg, item.getClass().getName(item));
                     MWBase::Environment::get().getWindowManager()->messageBox(msg);
 
                     MWBase::Environment::get().getMechanicsManager()->confiscateStolenItemToOwner(player, item, mPtr, 1);
@@ -362,13 +357,19 @@ namespace MWGui
         {
             MWBase::Environment::get().getWindowManager()->playSound("enchant success");
             MWBase::Environment::get().getWindowManager()->messageBox ("#{sEnchantmentMenu12}");
+            MWBase::Environment::get().getWindowManager()->removeGuiMode (GM_Enchanting);
         }
         else
         {
             MWBase::Environment::get().getWindowManager()->playSound("enchant fail");
             MWBase::Environment::get().getWindowManager()->messageBox ("#{sNotifyMessage34}");
+            if (!mEnchanting.getGem().isEmpty() && !mEnchanting.getGem().getRefData().getCount())
+            {
+                setSoulGem(MWWorld::Ptr());
+                mEnchanting.nextCastStyle();
+                updateLabels();
+                updateEffectsView();
+            }
         }
-
-        MWBase::Environment::get().getWindowManager()->removeGuiMode (GM_Enchanting);
     }
 }

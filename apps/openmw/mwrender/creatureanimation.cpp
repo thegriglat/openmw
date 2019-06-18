@@ -1,11 +1,9 @@
 #include "creatureanimation.hpp"
 
-#include <iostream>
-
 #include <osg/MatrixTransform>
 
 #include <components/esm/loadcrea.hpp>
-
+#include <components/debug/debuglog.hpp>
 #include <components/resource/resourcesystem.hpp>
 #include <components/resource/scenemanager.hpp>
 #include <components/sceneutil/attach.hpp>
@@ -51,7 +49,12 @@ CreatureWeaponAnimation::CreatureWeaponAnimation(const MWWorld::Ptr &ptr, const 
         setObjectRoot(model, true, false, true);
 
         if((ref->mBase->mFlags&ESM::Creature::Bipedal))
+        {
+            if (mWeaponSheathing)
+                injectWeaponBones();
+
             addAnimSource("meshes\\xbase_anim.nif", model);
+        }
         addAnimSource(model, model);
 
         mPtr.getClass().getInventoryStore(mPtr).setInvListener(this, mPtr);
@@ -85,6 +88,9 @@ void CreatureWeaponAnimation::updateParts()
     mAmmunition.reset();
     mWeapon.reset();
     mShield.reset();
+
+    updateHolsteredWeapon(!mShowWeapons);
+    updateQuiver();
 
     if (mShowWeapons)
         updatePart(mWeapon, MWWorld::InventoryStore::Slot_CarriedRight);
@@ -155,24 +161,31 @@ void CreatureWeaponAnimation::updatePart(PartHolderPtr& scene, int slot)
     }
     catch (std::exception& e)
     {
-        std::cerr << "Can not add creature part: " << e.what() << std::endl;
+        Log(Debug::Error) << "Can not add creature part: " << e.what();
     }
+}
+
+bool CreatureWeaponAnimation::isArrowAttached() const
+{
+    return mAmmunition != nullptr;
 }
 
 void CreatureWeaponAnimation::attachArrow()
 {
     WeaponAnimation::attachArrow(mPtr);
+    updateQuiver();
 }
 
 void CreatureWeaponAnimation::releaseArrow(float attackStrength)
 {
     WeaponAnimation::releaseArrow(mPtr, attackStrength);
+    updateQuiver();
 }
 
 osg::Group *CreatureWeaponAnimation::getArrowBone()
 {
     if (!mWeapon)
-        return NULL;
+        return nullptr;
 
     SceneUtil::FindByNameVisitor findVisitor ("ArrowBone");
     mWeapon->getNode()->accept(findVisitor);
@@ -182,7 +195,7 @@ osg::Group *CreatureWeaponAnimation::getArrowBone()
 
 osg::Node *CreatureWeaponAnimation::getWeaponNode()
 {
-    return mWeapon ? mWeapon->getNode().get() : NULL;
+    return mWeapon ? mWeapon->getNode().get() : nullptr;
 }
 
 Resource::ResourceSystem *CreatureWeaponAnimation::getResourceSystem()

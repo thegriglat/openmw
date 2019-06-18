@@ -6,7 +6,6 @@
 #include "../mwbase/environment.hpp"
 #include "../mwbase/world.hpp"
 #include "../mwbase/windowmanager.hpp"
-#include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/soundmanager.hpp"
 
 #include "../mwworld/ptr.hpp"
@@ -16,6 +15,7 @@
 #include "../mwworld/customdata.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/esmstore.hpp"
+#include "../mwworld/actionharvest.hpp"
 #include "../mwworld/actionopen.hpp"
 #include "../mwworld/actiontrap.hpp"
 #include "../mwphysics/physicssystem.hpp"
@@ -23,6 +23,7 @@
 
 #include "../mwgui/tooltips.hpp"
 
+#include "../mwrender/animation.hpp"
 #include "../mwrender/objects.hpp"
 #include "../mwrender/renderinginterface.hpp"
 
@@ -38,6 +39,10 @@ namespace MWClass
         virtual MWWorld::CustomData *clone() const;
 
         virtual ContainerCustomData& asContainerCustomData()
+        {
+            return *this;
+        }
+        virtual const ContainerCustomData& asContainerCustomData() const
         {
             return *this;
         }
@@ -64,7 +69,18 @@ namespace MWClass
 
             // store
             ptr.getRefData().setCustomData (data.release());
+
+            MWBase::Environment::get().getWorld()->addContainerScripts(ptr, ptr.getCell());
         }
+    }
+
+    bool canBeHarvested(const MWWorld::ConstPtr& ptr)
+    {
+        const MWRender::Animation* animation = MWBase::Environment::get().getWorld()->getAnimation(ptr);
+        if (animation == nullptr)
+            return false;
+
+        return animation->canBeHarvested();
     }
 
     void Container::respawn(const MWWorld::Ptr &ptr) const
@@ -73,8 +89,12 @@ namespace MWClass
             ptr.get<ESM::Container>();
         if (ref->mBase->mFlags & ESM::Container::Respawn)
         {
+            // Container was not touched, there is no need to modify its content.
+            if (ptr.getRefData().getCustomData() == nullptr)
+                return;
+
             MWBase::Environment::get().getWorld()->removeContainerScripts(ptr);
-            ptr.getRefData().setCustomData(NULL);
+            ptr.getRefData().setCustomData(nullptr);
         }
     }
 
@@ -139,24 +159,21 @@ namespace MWClass
         const std::string trapActivationSound = "Disarm Trap Fail";
 
         MWWorld::Ptr player = MWBase::Environment::get().getWorld ()->getPlayerPtr();
-        const MWWorld::InventoryStore& invStore = player.getClass().getInventoryStore(player);
+        MWWorld::InventoryStore& invStore = player.getClass().getInventoryStore(player);
 
         bool isLocked = ptr.getCellRef().getLockLevel() > 0;
         bool isTrapped = !ptr.getCellRef().getTrap().empty();
         bool hasKey = false;
         std::string keyName;
 
-        // make key id lowercase
-        std::string keyId = ptr.getCellRef().getKey();
-        Misc::StringUtils::lowerCaseInPlace(keyId);
-        for (MWWorld::ConstContainerStoreIterator it = invStore.cbegin(); it != invStore.cend(); ++it)
+        const std::string keyId = ptr.getCellRef().getKey();
+        if (!keyId.empty())
         {
-            std::string refId = it->getCellRef().getRefId();
-            Misc::StringUtils::lowerCaseInPlace(refId);
-            if (refId == keyId)
+            MWWorld::Ptr keyPtr = invStore.search(keyId);
+            if (!keyPtr.isEmpty())
             {
                 hasKey = true;
-                keyName = it->getClass().getName(*it);
+                keyName = keyPtr.getClass().getName(keyPtr);
             }
         }
 
@@ -179,6 +196,12 @@ namespace MWClass
         {
             if(!isTrapped)
             {
+                if (canBeHarvested(ptr))
+                {
+                    std::shared_ptr<MWWorld::Action> action (new MWWorld::ActionHarvest(ptr));
+                    return action;
+                }
+
                 std::shared_ptr<MWWorld::Action> action (new MWWorld::ActionOpen(ptr));
                 return action;
             }
@@ -229,9 +252,18 @@ namespace MWClass
 
     bool Container::hasToolTip (const MWWorld::ConstPtr& ptr) const
     {
-        const MWWorld::LiveCellRef<ESM::Container> *ref = ptr.get<ESM::Container>();
+        if (getName(ptr).empty())
+            return false;
 
-        return (ref->mBase->mName != "");
+        if (const MWWorld::CustomData* data = ptr.getRefData().getCustomData())
+            return !canBeHarvested(ptr) || data->asContainerCustomData().mContainerStore.hasVisibleItems();
+
+        return true;
+    }
+
+    bool Container::canBeActivated(const MWWorld::Ptr& ptr) const
+    {
+        return hasToolTip(ptr);
     }
 
     MWGui::ToolTipInfo Container::getToolTipInfo (const MWWorld::ConstPtr& ptr, int count) const
@@ -242,9 +274,10 @@ namespace MWClass
         info.caption = ref->mBase->mName;
 
         std::string text;
-        if (ptr.getCellRef().getLockLevel() > 0)
-            text += "\n#{sLockLevel}: " + MWGui::ToolTips::toString(ptr.getCellRef().getLockLevel());
-        else if (ptr.getCellRef().getLockLevel() < 0)
+        int lockLevel = ptr.getCellRef().getLockLevel();
+        if (lockLevel > 0 && lockLevel != ESM::UnbreakableLock)
+            text += "\n#{sLockLevel}: " + MWGui::ToolTips::toString(lockLevel);
+        else if (lockLevel < 0)
             text += "\n#{sUnlocked}";
         if (ptr.getCellRef().getTrap() != "")
             text += "\n#{sTrapped}";
@@ -274,15 +307,16 @@ namespace MWClass
 
     void Container::lock (const MWWorld::Ptr& ptr, int lockLevel) const
     {
-        if(lockLevel!=0)
-            ptr.getCellRef().setLockLevel(abs(lockLevel)); //Changes lock to locklevel, in positive
+        if(lockLevel != 0)
+            ptr.getCellRef().setLockLevel(abs(lockLevel)); //Changes lock to locklevel, if positive
         else
-            ptr.getCellRef().setLockLevel(abs(ptr.getCellRef().getLockLevel())); //No locklevel given, just flip the original one
+            ptr.getCellRef().setLockLevel(ESM::UnbreakableLock); // If zero, set to max lock level
     }
 
     void Container::unlock (const MWWorld::Ptr& ptr) const
     {
-        ptr.getCellRef().setLockLevel(-abs(ptr.getCellRef().getLockLevel())); //Makes lockLevel negative
+        int lockLevel = ptr.getCellRef().getLockLevel();
+        ptr.getCellRef().setLockLevel(-abs(lockLevel)); //Makes lockLevel negative
     }
 
     bool Container::canLock(const MWWorld::ConstPtr &ptr) const

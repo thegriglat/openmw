@@ -20,10 +20,10 @@ namespace MWGui
 
     class WindowBase: public Layout
     {
-        public:
+    public:
         WindowBase(const std::string& parLayout);
 
-        virtual MyGUI::Widget* getDefaultKeyFocus() { return NULL; }
+        virtual MyGUI::Widget* getDefaultKeyFocus() { return nullptr; }
 
         // Events
         typedef MyGUI::delegates::CMultiDelegate1<WindowBase*> EventHandle_WindowBase;
@@ -52,19 +52,24 @@ namespace MWGui
 
         /// Called when GUI viewport changes size
         virtual void onResChange(int width, int height) {}
+
+    protected:
+        virtual void onTitleDoubleClicked();
+
+    private:
+        void onDoubleClick(MyGUI::Widget* _sender);
     };
 
-
     /*
-     * "Modal" windows cause the rest of the interface to be unaccessible while they are visible
+     * "Modal" windows cause the rest of the interface to be inaccessible while they are visible
      */
     class WindowModal : public WindowBase
     {
     public:
         WindowModal(const std::string& parLayout);
-        virtual void onOpen();
-        virtual void onClose();
-        virtual bool exit() {return true;}
+        virtual void onOpen() override;
+        virtual void onClose() override;
+        virtual bool exit() override {return true;}
     };
 
     /// A window that cannot be the target of a drag&drop action.
@@ -81,6 +86,15 @@ namespace MWGui
         MyGUI::Widget* mWidget;
         DragAndDrop* mDrag;
         bool mTransparent;
+    };
+
+    class BookWindowBase : public WindowBase
+    {
+    public:
+        BookWindowBase(const std::string& parLayout);
+
+    protected:
+        float adjustButton (char const * name);
     };
 }
 

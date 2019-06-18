@@ -1,10 +1,10 @@
 #include "loadscpt.hpp"
 
+#include <components/debug/debuglog.hpp>
+
 #include "esmreader.hpp"
 #include "esmwriter.hpp"
 #include "defs.hpp"
-
-#include <iostream>
 
 namespace ESM
 {
@@ -30,6 +30,12 @@ namespace ESM
         // The tmp buffer is a null-byte separated string list, we
         // just have to pick out one string at a time.
         char* str = &tmp[0];
+        if (!str && mVarNames.size() > 0)
+        {
+            Log(Debug::Warning) << "SCVR with no variable names";
+            return;
+        }
+
         for (size_t i = 0; i < mVarNames.size(); i++)
         {
             // Support '\r' terminated strings like vanilla.  See Bug #1324.
@@ -45,12 +51,12 @@ namespace ESM
                 // an exeption, just log an error and continue.
                 std::stringstream ss;
 
-                ss << "ESM Error: " << "String table overflow";
+                ss << "String table overflow";
                 ss << "\n  File: " << esm.getName();
                 ss << "\n  Record: " << esm.getContext().recName.toString();
                 ss << "\n  Subrecord: " << "SCVR";
                 ss << "\n  Offset: 0x" << std::hex << esm.getFileOffset();
-                std::cerr << ss.str() << std::endl;
+                Log(Debug::Verbose) << ss.str();
                 break;
             }
 
@@ -91,14 +97,14 @@ namespace ESM
                     if (subSize != static_cast<uint32_t>(mData.mScriptDataSize))
                     {
                         std::stringstream ss;
-                        ss << "ESM Warning: Script data size defined in SCHD subrecord does not match size of SCDT subrecord";
+                        ss << "Script data size defined in SCHD subrecord does not match size of SCDT subrecord";
                         ss << "\n  File: " << esm.getName();
                         ss << "\n  Offset: 0x" << std::hex << esm.getFileOffset();
-                        std::cerr << ss.str() << std::endl;
+                        Log(Debug::Verbose) << ss.str();
                     }
 
                     mScriptData.resize(subSize);
-                    esm.getExact(&mScriptData[0], mScriptData.size());
+                    esm.getExact(mScriptData.data(), mScriptData.size());
                     break;
                 }
                 case ESM::FourCC<'S','C','T','X'>::value:
@@ -150,7 +156,7 @@ namespace ESM
         }
 
         esm.startSubRecord("SCDT");
-        esm.write(reinterpret_cast<const char * >(&mScriptData[0]), mData.mScriptDataSize);
+        esm.write(reinterpret_cast<const char *>(mScriptData.data()), mData.mScriptDataSize);
         esm.endRecord("SCDT");
 
         esm.writeHNOString("SCTX", mScriptText);

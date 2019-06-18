@@ -1,6 +1,7 @@
 #include "object.hpp"
 
 #include <stdexcept>
+#include <string>
 #include <iostream>
 
 #include <osg/Depth>
@@ -24,11 +25,12 @@
 #include "../../model/world/cellcoordinates.hpp"
 #include "../../model/prefs/state.hpp"
 
+#include <components/debug/debuglog.hpp>
 #include <components/resource/scenemanager.hpp>
 #include <components/sceneutil/lightutil.hpp>
 #include <components/sceneutil/lightmanager.hpp>
-#include <components/fallback/fallback.hpp>
 
+#include "actor.hpp"
 #include "mask.hpp"
 
 
@@ -78,70 +80,67 @@ void CSVRender::Object::update()
 {
     clear();
 
-    std::string model;
-    int error = 0; // 1 referenceable does not exist, 2 referenceable does not specify a mesh
-
     const CSMWorld::RefIdCollection& referenceables = mData.getReferenceables();
+    const int TypeIndex = referenceables.findColumnIndex(CSMWorld::Columns::ColumnId_RecordType);
+    const int ModelIndex = referenceables.findColumnIndex (CSMWorld::Columns::ColumnId_Model);
 
     int index = referenceables.searchId (mReferenceableId);
-    const ESM::Light* light = NULL;
-
-    if (index==-1)
-        error = 1;
-    else
-    {
-        /// \todo check for Deleted state (error 1)
-
-        model = referenceables.getData (index,
-            referenceables.findColumnIndex (CSMWorld::Columns::ColumnId_Model)).
-            toString().toUtf8().constData();
-
-        int recordType =
-                referenceables.getData (index,
-                referenceables.findColumnIndex(CSMWorld::Columns::ColumnId_RecordType)).toInt();
-        if (recordType == CSMWorld::UniversalId::Type_Light)
-        {
-            light = &dynamic_cast<const CSMWorld::Record<ESM::Light>& >(referenceables.getRecord(index)).get();
-        }
-
-        if (model.empty())
-            error = 2;
-    }
+    const ESM::Light* light = nullptr;
 
     mBaseNode->removeChildren(0, mBaseNode->getNumChildren());
 
-    if (error)
+    if (index == -1)
     {
         mBaseNode->addChild(createErrorCube());
+        return;
     }
-    else
+
+    /// \todo check for Deleted state (error 1)
+
+    int recordType = referenceables.getData(index, TypeIndex).toInt();
+    std::string model = referenceables.getData(index, ModelIndex).toString().toUtf8().constData();
+
+    if (recordType == CSMWorld::UniversalId::Type_Light)
     {
-        try
+        light = &dynamic_cast<const CSMWorld::Record<ESM::Light>& >(referenceables.getRecord(index)).get();
+        if (model.empty())
+            model = "marker_light.nif";
+    }
+
+    if (recordType == CSMWorld::UniversalId::Type_CreatureLevelledList)
+    {
+        if (model.empty())
+            model = "marker_creature.nif";
+    }
+
+    try
+    {
+        if (recordType == CSMWorld::UniversalId::Type_Npc || recordType == CSMWorld::UniversalId::Type_Creature)
+        {
+            if (!mActor) mActor.reset(new Actor(mReferenceableId, mData));
+            mActor->update();
+            mBaseNode->addChild(mActor->getBaseNode());
+        }
+        else if (!model.empty())
         {
             std::string path = "meshes\\" + model;
-
             mResourceSystem->getSceneManager()->getInstance(path, mBaseNode);
         }
-        catch (std::exception& e)
+        else
         {
-            // TODO: use error marker mesh
-            std::cerr << e.what() << std::endl;
+            throw std::runtime_error(mReferenceableId + " has no model");
         }
+    }
+    catch (std::exception& e)
+    {
+        // TODO: use error marker mesh
+        Log(Debug::Error) << e.what();
     }
 
     if (light)
     {
-        const Fallback::Map* fallback = mData.getFallbackMap();
-        static bool outQuadInLin = fallback->getFallbackBool("LightAttenuation_OutQuadInLin");
-        static bool useQuadratic = fallback->getFallbackBool("LightAttenuation_UseQuadratic");
-        static float quadraticValue = fallback->getFallbackFloat("LightAttenuation_QuadraticValue");
-        static float quadraticRadiusMult = fallback->getFallbackFloat("LightAttenuation_QuadraticRadiusMult");
-        static bool useLinear = fallback->getFallbackBool("LightAttenuation_UseLinear");
-        static float linearRadiusMult = fallback->getFallbackFloat("LightAttenuation_LinearRadiusMult");
-        static float linearValue = fallback->getFallbackFloat("LightAttenuation_LinearValue");
         bool isExterior = false; // FIXME
-        SceneUtil::addLight(mBaseNode, light, Mask_ParticleSystem, Mask_Lighting, isExterior, outQuadInLin, useQuadratic,
-                            quadraticValue, quadraticRadiusMult, useLinear, linearRadiusMult, linearValue);
+        SceneUtil::addLight(mBaseNode, light, Mask_ParticleSystem, Mask_Lighting, isExterior);
     }
 }
 
@@ -305,20 +304,18 @@ osg::ref_ptr<osg::Node> CSVRender::Object::makeMoveOrScaleMarker (int axis)
 
 osg::ref_ptr<osg::Node> CSVRender::Object::makeRotateMarker (int axis)
 {
-    const float Pi = 3.14159265f;
-
     const float InnerRadius = std::max(MarkerShaftBaseLength, mBaseNode->getBound().radius());
     const float OuterRadius = InnerRadius + MarkerShaftWidth;
 
     const float SegmentDistance = 100.f;
-    const size_t SegmentCount = std::min(64, std::max(24, (int)(OuterRadius * 2 * Pi / SegmentDistance)));
+    const size_t SegmentCount = std::min(64, std::max(24, (int)(OuterRadius * 2 * osg::PI / SegmentDistance)));
     const size_t VerticesPerSegment = 4;
     const size_t IndicesPerSegment = 24;
 
     const size_t VertexCount = SegmentCount * VerticesPerSegment;
     const size_t IndexCount = SegmentCount * IndicesPerSegment;
 
-    const float Angle = 2 * Pi / SegmentCount;
+    const float Angle = 2 * osg::PI / SegmentCount;
 
     const unsigned short IndexPattern[IndicesPerSegment] =
     {
@@ -372,10 +369,10 @@ osg::ref_ptr<osg::Node> CSVRender::Object::makeRotateMarker (int axis)
                 indices[j] -= VertexCount;
         }
 
-        size_t offset = i * IndicesPerSegment;
+        size_t elementOffset = i * IndicesPerSegment;
         for (size_t j = 0; j < IndicesPerSegment; ++j)
         {
-            primitives->setElement(offset++, indices[IndexPattern[j]]);
+            primitives->setElement(elementOffset++, indices[IndexPattern[j]]);
         }
     }
 
@@ -663,6 +660,33 @@ void CSVRender::Object::apply (CSMWorld::CommandMacro& commands)
 
     if (mOverrideFlags & Override_Position)
     {
+        //Do cell check first so positions can be compared
+        const CSMWorld::CellRef& ref = collection.getRecord(recordIndex).get();
+
+        if (CSMWorld::CellCoordinates::isExteriorCell(ref.mCell))
+        {
+            // Find cell index at new position
+            std::pair<int, int> cellIndex = CSMWorld::CellCoordinates::coordinatesToCellIndex(
+                mPositionOverride.pos[0], mPositionOverride.pos[1]);
+            std::pair<int, int> originalIndex = ref.getCellIndex();
+
+            int cellColumn = collection.findColumnIndex (static_cast<CSMWorld::Columns::ColumnId> (
+                CSMWorld::Columns::ColumnId_Cell));
+            int refNumColumn = collection.findColumnIndex (static_cast<CSMWorld::Columns::ColumnId> (
+                CSMWorld::Columns::ColumnId_RefNum));
+
+            if (cellIndex != originalIndex)
+            {
+                /// \todo figure out worldspace (not important until multiple worldspaces are supported)
+                std::string cellId = CSMWorld::CellCoordinates (cellIndex).getId ("");
+
+                commands.push (new CSMWorld::ModifyCommand (*model,
+                    model->index (recordIndex, cellColumn), QString::fromUtf8 (cellId.c_str())));
+                commands.push (new CSMWorld::ModifyCommand( *model,
+                    model->index (recordIndex, refNumColumn), 0));
+            }
+        }
+
         for (int i=0; i<3; ++i)
         {
             int column = collection.findColumnIndex (static_cast<CSMWorld::Columns::ColumnId> (
@@ -670,20 +694,6 @@ void CSVRender::Object::apply (CSMWorld::CommandMacro& commands)
 
             commands.push (new CSMWorld::ModifyCommand (*model,
                 model->index (recordIndex, column), mPositionOverride.pos[i]));
-        }
-
-        int column = collection.findColumnIndex (static_cast<CSMWorld::Columns::ColumnId> (
-            CSMWorld::Columns::ColumnId_Cell));
-
-        if (CSMWorld::CellCoordinates::isExteriorCell(collection.getRecord (recordIndex).get().mCell))
-        {
-            std::pair<int, int> cellIndex = collection.getRecord (recordIndex).get().getCellIndex();
-
-            /// \todo figure out worldspace (not important until multiple worldspaces are supported)
-            std::string cellId = CSMWorld::CellCoordinates (cellIndex).getId ("");
-
-            commands.push (new CSMWorld::ModifyCommand (*model,
-                model->index (recordIndex, column), QString::fromUtf8 (cellId.c_str())));
         }
     }
 

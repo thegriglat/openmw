@@ -77,7 +77,7 @@ void GraphicsWindowSDL2::init()
         return;
 
     WindowData *inheritedWindowData = dynamic_cast<WindowData*>(_traits->inheritedWindowData.get());
-    mWindow = inheritedWindowData ? inheritedWindowData->mWindow : NULL;
+    mWindow = inheritedWindowData ? inheritedWindowData->mWindow : nullptr;
 
     mOwnsWindow = (mWindow == 0);
     if(mOwnsWindow)
@@ -91,10 +91,22 @@ void GraphicsWindowSDL2::init()
     SDL_Window *oldWin = SDL_GL_GetCurrentWindow();
     SDL_GLContext oldCtx = SDL_GL_GetCurrentContext();
    
-#if defined(OPENGL_ES) || defined(ANDROID)
-     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 1);
-     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);    
+#if defined(ANDROID)
+    int major = 1;
+    int minor = 1;
+    char *ver = getenv("OPENMW_GLES_VERSION");
+
+    if (ver && strcmp(ver, "2") == 0) {
+        major = 2;
+        minor = 0;
+    } else if (ver && strcmp(ver, "3") == 0) {
+        major = 3;
+        minor = 2;
+    }
+
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, major);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, minor);
 #endif
     
     mContext = SDL_GL_CreateContext(mWindow);
@@ -104,7 +116,7 @@ void GraphicsWindowSDL2::init()
         return;
     }
 
-    SDL_GL_SetSwapInterval(_traits->vsync ? 1 : 0);
+    setSwapInterval(_traits->vsync);
 
     SDL_GL_MakeCurrent(oldWin, oldCtx);
 
@@ -153,7 +165,7 @@ bool GraphicsWindowSDL2::releaseContextImplementation()
         return false;
     }
 
-    return SDL_GL_MakeCurrent(NULL, NULL)==0;
+    return SDL_GL_MakeCurrent(nullptr, nullptr)==0;
 }
 
 
@@ -161,11 +173,11 @@ void GraphicsWindowSDL2::closeImplementation()
 {
     if(mContext)
         SDL_GL_DeleteContext(mContext);
-    mContext = NULL;
+    mContext = nullptr;
 
     if(mWindow && mOwnsWindow)
         SDL_DestroyWindow(mWindow);
-    mWindow = NULL;
+    mWindow = nullptr;
 
     mValid = false;
     mRealized = false;
@@ -185,9 +197,29 @@ void GraphicsWindowSDL2::setSyncToVBlank(bool on)
 
     SDL_GL_MakeCurrent(mWindow, mContext);
 
-    SDL_GL_SetSwapInterval(on ? 1 : 0);
+    setSwapInterval(on);
 
     SDL_GL_MakeCurrent(oldWin, oldCtx);
+}
+
+void GraphicsWindowSDL2::setSwapInterval(bool enable)
+{
+    if (enable)
+    {
+        if (SDL_GL_SetSwapInterval(-1) == -1)
+        {
+            OSG_NOTICE << "Adaptive vsync unsupported" << std::endl;
+            if (SDL_GL_SetSwapInterval(1) == -1)
+            {
+                OSG_NOTICE << "Vertical synchronization unsupported, disabling" << std::endl;
+                SDL_GL_SetSwapInterval(0);
+            }
+        }
+    }
+    else
+    {
+        SDL_GL_SetSwapInterval(0);
+    }
 }
 
 void GraphicsWindowSDL2::raiseWindow()

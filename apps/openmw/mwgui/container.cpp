@@ -6,7 +6,6 @@
 #include "../mwbase/environment.hpp"
 #include "../mwbase/world.hpp"
 #include "../mwbase/windowmanager.hpp"
-#include "../mwbase/dialoguemanager.hpp"
 #include "../mwbase/mechanicsmanager.hpp"
 
 #include "../mwworld/class.hpp"
@@ -18,7 +17,6 @@
 #include "inventorywindow.hpp"
 
 #include "itemview.hpp"
-#include "itemwidget.hpp"
 #include "inventoryitemmodel.hpp"
 #include "containeritemmodel.hpp"
 #include "sortfilteritemmodel.hpp"
@@ -31,8 +29,8 @@ namespace MWGui
     ContainerWindow::ContainerWindow(DragAndDrop* dragAndDrop)
         : WindowBase("openmw_container_window.layout")
         , mDragAndDrop(dragAndDrop)
-        , mSortModel(NULL)
-        , mModel(NULL)
+        , mSortModel(nullptr)
+        , mModel(nullptr)
         , mSelectedItem(-1)
     {
         getWidget(mDisposeCorpseButton, "DisposeCorpseButton");
@@ -52,7 +50,7 @@ namespace MWGui
 
     void ContainerWindow::onItemSelected(int index)
     {
-        if (mDragAndDrop->mIsOnDragAndDrop && mModel)
+        if (mDragAndDrop->mIsOnDragAndDrop)
         {
             dropItem();
             return;
@@ -83,11 +81,14 @@ namespace MWGui
             dialog->eventOkClicked += MyGUI::newDelegate(this, &ContainerWindow::dragItem);
         }
         else
-            dragItem (NULL, count);
+            dragItem (nullptr, count);
     }
 
     void ContainerWindow::dragItem(MyGUI::Widget* sender, int count)
     {
+        if (!mModel)
+            return;
+
         if (!onTakeItem(mModel->getItem(mSelectedItem), count))
             return;
 
@@ -96,6 +97,9 @@ namespace MWGui
 
     void ContainerWindow::dropItem()
     {
+        if (!mModel)
+            return;
+
         bool success = mModel->onDropItem(mDragAndDrop->mItem.mBase, mDragAndDrop->mDraggedCount);
 
         if (success)
@@ -104,7 +108,7 @@ namespace MWGui
 
     void ContainerWindow::onBackgroundSelected()
     {
-        if (mDragAndDrop->mIsOnDragAndDrop && mModel)
+        if (mDragAndDrop->mIsOnDragAndDrop)
             dropItem();
     }
 
@@ -145,9 +149,9 @@ namespace MWGui
     void ContainerWindow::resetReference()
     {
         ReferenceInterface::resetReference();
-        mItemView->setModel(NULL);
-        mModel = NULL;
-        mSortModel = NULL;
+        mItemView->setModel(nullptr);
+        mModel = nullptr;
+        mSortModel = nullptr;
     }
 
     void ContainerWindow::onClose()
@@ -156,6 +160,9 @@ namespace MWGui
 
         if (mModel)
             mModel->onClose();
+
+        if (!mPtr.isEmpty())
+            MWBase::Environment::get().getMechanicsManager()->onClose(mPtr);
     }
 
     void ContainerWindow::onCloseButtonClicked(MyGUI::Widget* _sender)
@@ -165,8 +172,10 @@ namespace MWGui
 
     void ContainerWindow::onTakeAllButtonClicked(MyGUI::Widget* _sender)
     {
-        if(mDragAndDrop != NULL && mDragAndDrop->mIsOnDragAndDrop)
+        if(mDragAndDrop != nullptr && mDragAndDrop->mIsOnDragAndDrop)
             return;
+
+        MWBase::Environment::get().getWindowManager()->setKeyFocusWidget(mCloseButton);
 
         // transfer everything into the player's inventory
         ItemModel* playerModel = MWBase::Environment::get().getWindowManager()->getInventoryWindow()->getModel();
@@ -211,8 +220,10 @@ namespace MWGui
 
     void ContainerWindow::onDisposeCorpseButtonClicked(MyGUI::Widget *sender)
     {
-        if(mDragAndDrop == NULL || !mDragAndDrop->mIsOnDragAndDrop)
+        if(mDragAndDrop == nullptr || !mDragAndDrop->mIsOnDragAndDrop)
         {
+            MWBase::Environment::get().getWindowManager()->setKeyFocusWidget(mCloseButton);
+
             onTakeAllButtonClicked(mTakeButton);
 
             if (mPtr.getClass().isPersistent(mPtr))

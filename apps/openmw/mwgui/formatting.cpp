@@ -4,15 +4,12 @@
 #include <MyGUI_Gui.h>
 #include <MyGUI_EditBox.h>
 #include <MyGUI_ImageBox.h>
-#include <MyGUI_FontManager.h>
 
 // correctBookartPath
 #include "../mwbase/environment.hpp"
 #include "../mwbase/windowmanager.hpp"
 
-#include <boost/algorithm/string/replace.hpp>
-#include <boost/algorithm/string/predicate.hpp>
-
+#include <components/debug/debuglog.hpp>
 #include <components/interpreter/defines.hpp>
 #include <components/misc/stringops.hpp>
 
@@ -26,10 +23,21 @@ namespace MWGui
         BookTextParser::BookTextParser(const std::string & text)
             : mIndex(0), mText(text), mIgnoreNewlineTags(true), mIgnoreLineEndings(true), mClosingTag(false)
         {
-            MWScript::InterpreterContext interpreterContext(NULL, MWWorld::Ptr()); // empty arguments, because there is no locals or actor
+            MWScript::InterpreterContext interpreterContext(nullptr, MWWorld::Ptr()); // empty arguments, because there is no locals or actor
             mText = Interpreter::fixDefinesBook(mText, interpreterContext);
 
-            boost::algorithm::replace_all(mText, "\r", "");
+            Misc::StringUtils::replaceAll(mText, "\r", "");
+
+            // vanilla game does not show any text after the last EOL tag.
+            const std::string lowerText = Misc::StringUtils::lowerCase(mText);
+            int brIndex = lowerText.rfind("<br>");
+            int pIndex = lowerText.rfind("<p>");
+            if (brIndex == pIndex)
+                mText = "";
+            else if (brIndex > pIndex)
+                mText = mText.substr(0, brIndex+4);
+            else
+                mText = mText.substr(0, pIndex+3);
 
             registerTag("br", Event_BrTag);
             registerTag("p", Event_PTag);
@@ -246,16 +254,6 @@ namespace MWGui
                     if (plainText.size() && brAtEnd)
                         plainText.erase(plainText.end()-1);
 
-#if (MYGUI_VERSION < MYGUI_DEFINE_VERSION(3, 2, 2))
-                    // splitting won't be fully functional until 3.2.2 (see TextElement::pageSplit())
-                    // hack: prevent newlines at the end of the book possibly creating unnecessary pages
-                    if (event == BookTextParser::Event_EOF)
-                    {
-                        while (plainText.size() && plainText[plainText.size()-1] == '\n')
-                            plainText.erase(plainText.end()-1);
-                    }
-#endif
-
                     if (!plainText.empty() || brBeforeLastTag || isPrevImg)
                     {
                         TextElement elem(paper, pag, mBlockStyle,
@@ -289,7 +287,7 @@ namespace MWGui
 
                         if (!exists)
                         {
-                            std::cerr << "Warning: Could not find \"" << src << "\" referenced by an <img> tag." << std::endl;
+                            Log(Debug::Warning) << "Warning: Could not find \"" << src << "\" referenced by an <img> tag.";
                             break;
                         }
 
@@ -365,7 +363,7 @@ namespace MWGui
             if (attr.find("face") != attr.end())
             {
                 std::string face = attr.at("face");
-                mTextStyle.mFont = face;
+                mTextStyle.mFont = "Journalbook "+face;
             }
             if (attr.find("size") != attr.end())
             {
@@ -403,7 +401,7 @@ namespace MWGui
             : GraphicElement(parent, pag, blockStyle),
               mTextStyle(textStyle)
         {
-            MyGUI::EditBox* box = parent->createWidget<MyGUI::EditBox>("NormalText",
+            Gui::EditBox* box = parent->createWidget<Gui::EditBox>("NormalText",
                 MyGUI::IntCoord(0, pag.getCurrentTop(), pag.getPageWidth(), 0), MyGUI::Align::Left | MyGUI::Align::Top,
                 parent->getName() + MyGUI::utility::toString(parent->getChildCount()));
             box->setEditStatic(true);
@@ -420,15 +418,6 @@ namespace MWGui
             mEditBox = box;
         }
 
-        int TextElement::currentFontHeight() const
-        {
-            std::string fontName(mTextStyle.mFont == "Default" ? MyGUI::FontManager::getInstance().getDefaultFont() : mTextStyle.mFont);
-            MyGUI::IFont* font = MyGUI::FontManager::getInstance().getByName(fontName);
-            if (!font)
-                return 0;
-            return font->getDefaultHeight();
-        }
-
         int TextElement::getHeight()
         {
             return mEditBox->getTextSize().height;
@@ -437,15 +426,13 @@ namespace MWGui
         int TextElement::pageSplit()
         {
             // split lines
-            const int lineHeight = currentFontHeight();
+            const int lineHeight = MWBase::Environment::get().getWindowManager()->getFontHeight();
             unsigned int lastLine = (mPaginator.getStartTop() + mPaginator.getPageHeight() - mPaginator.getCurrentTop());
             if (lineHeight > 0)
                 lastLine /= lineHeight;
             int ret = mPaginator.getCurrentTop() + lastLine * lineHeight;
 
             // first empty lines that would go to the next page should be ignored
-            // unfortunately, getLineInfo method won't be available until 3.2.2
-#if (MYGUI_VERSION >= MYGUI_DEFINE_VERSION(3, 2, 2))
             mPaginator.setIgnoreLeadingEmptyLines(true);
 
             const MyGUI::VectorLineInfo & lines = mEditBox->getSubWidgetText()->castType<MyGUI::EditText>()->getLineInfo();
@@ -459,7 +446,6 @@ namespace MWGui
                     break;
                 }
             }
-#endif
             return ret;
         }
 

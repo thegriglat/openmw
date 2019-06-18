@@ -38,8 +38,16 @@ namespace MWGui
         if (!mRunning)
             return;
 
-        if (mRemainingTime <= 0 || mStartAlpha == mTargetAlpha)
+        if (mStartAlpha == mTargetAlpha)
         {
+            finish();
+            return;
+        }
+
+        if (mRemainingTime <= 0)
+        {
+            // Make sure the target alpha is applied
+            mFader->notifyAlphaChanged(mTargetAlpha);
             finish();
             return;
         }
@@ -99,7 +107,14 @@ namespace MWGui
 
     ScreenFader::~ScreenFader()
     {
-        MyGUI::Gui::getInstance().eventFrameStart -= MyGUI::newDelegate(this, &ScreenFader::onFrameStart);
+        try
+        {
+            MyGUI::Gui::getInstance().eventFrameStart -= MyGUI::newDelegate(this, &ScreenFader::onFrameStart);
+        }
+        catch(const MyGUI::Exception& e)
+        {
+            Log(Debug::Error) << "Error in the destructor: " << e.what();
+        }
     }
 
     void ScreenFader::onFrameStart(float dt)
@@ -155,7 +170,7 @@ namespace MWGui
         if (time < 0.f)
             return;
 
-        if (time == 0.f)
+        if (time == 0.f && delay == 0.f)
         {
             mCurrentAlpha = targetAlpha;
             applyAlpha();

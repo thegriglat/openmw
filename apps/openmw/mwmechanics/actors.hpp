@@ -4,12 +4,24 @@
 #include <set>
 #include <vector>
 #include <string>
-#include <map>
 #include <list>
+#include <map>
 
-#include "../mwbase/world.hpp"
+namespace ESM
+{
+    class ESMReader;
+    class ESMWriter;
+}
 
-#include "movement.hpp"
+namespace osg
+{
+    class Vec3f;
+}
+
+namespace Loading
+{
+    class Listener;
+}
 
 namespace MWWorld
 {
@@ -20,13 +32,15 @@ namespace MWWorld
 namespace MWMechanics
 {
     class Actor;
+    class CharacterController;
     class CreatureStats;
 
     class Actors
     {
             std::map<std::string, int> mDeathCount;
 
-            void updateNpc(const MWWorld::Ptr &ptr, float duration);
+            void addBoundItem (const std::string& itemId, const MWWorld::Ptr& actor);
+            void removeBoundItem (const std::string& itemId, const MWWorld::Ptr& actor);
 
             void adjustMagicEffects (const MWWorld::Ptr& creature);
 
@@ -37,11 +51,11 @@ namespace MWMechanics
 
             void calculateRestoration (const MWWorld::Ptr& ptr, float duration);
 
-            void updateDrowning (const MWWorld::Ptr& ptr, float duration);
+            void updateDrowning (const MWWorld::Ptr& ptr, float duration, bool isKnockedOut, bool isPlayer);
 
-            void updateEquippedLight (const MWWorld::Ptr& ptr, float duration);
+            void updateEquippedLight (const MWWorld::Ptr& ptr, float duration, bool mayEquip);
 
-            void updateCrimePersuit (const MWWorld::Ptr& ptr, float duration);
+            void updateCrimePursuit (const MWWorld::Ptr& ptr, float duration);
 
             void killDeadActors ();
 
@@ -65,6 +79,9 @@ namespace MWMechanics
             /// paused we may want to do it manually (after equipping permanent enchantment)
             void updateMagicEffects (const MWWorld::Ptr& ptr);
 
+            void updateProcessingRange();
+            float getProcessingRange() const;
+
             void addActor (const MWWorld::Ptr& ptr, bool updateImmediately=false);
             ///< Register an actor for stats management
             ///
@@ -74,6 +91,8 @@ namespace MWMechanics
             ///< Deregister an actor for stats management
             ///
             /// \note Ignored, if \a ptr is not a registered actor.
+
+            void castSpell(const MWWorld::Ptr& ptr, const std::string spellId, bool manualSpell=false);
 
             void updateActor(const MWWorld::Ptr &old, const MWWorld::Ptr& ptr);
             ///< Updates an actor with a new Ptr
@@ -97,13 +116,18 @@ namespace MWMechanics
             */
             void engageCombat(const MWWorld::Ptr& actor1, const MWWorld::Ptr& actor2, std::map<const MWWorld::Ptr, const std::set<MWWorld::Ptr> >& cachedAllies, bool againstPlayer);
 
+            void playIdleDialogue(const MWWorld::Ptr& actor);
+
             void updateHeadTracking(const MWWorld::Ptr& actor, const MWWorld::Ptr& targetActor,
                                             MWWorld::Ptr& headTrackTarget, float& sqrHeadTrackDistance);
 
-            void rest(bool sleep);
-            ///< Update actors while the player is waiting or sleeping. This should be called every hour.
+            void rest(double hours, bool sleep);
+            ///< Update actors while the player is waiting or sleeping.
 
-            void restoreDynamicStats(const MWWorld::Ptr& actor, bool sleep);
+            void updateSneaking(CharacterController* ctrl, float duration);
+            ///< Update the sneaking indicator state according to the given player character controller.
+
+            void restoreDynamicStats(const MWWorld::Ptr& actor, double hours, bool sleep);
 
             int getHoursToRest(const MWWorld::Ptr& ptr) const;
             ///< Calculate how many hours the given actor needs to rest in order to be fully healed
@@ -114,7 +138,7 @@ namespace MWMechanics
             int countDeaths (const std::string& id) const;
             ///< Return the number of deaths for actors with the given ID.
 
-            bool isAttackPrepairing(const MWWorld::Ptr& ptr);
+            bool isAttackPreparing(const MWWorld::Ptr& ptr);
             bool isRunning(const MWWorld::Ptr& ptr);
             bool isSneaking(const MWWorld::Ptr& ptr);
 
@@ -159,12 +183,16 @@ namespace MWMechanics
 
             void clear(); // Clear death counter
 
+            bool isCastingSpell(const MWWorld::Ptr& ptr) const;
             bool isReadyToBlock(const MWWorld::Ptr& ptr) const;
             bool isAttackingOrSpell(const MWWorld::Ptr& ptr) const;
 
     private:
+        void updateVisibility (const MWWorld::Ptr& ptr, CharacterController* ctrl);
+
         PtrActorMap mActors;
         float mTimerDisposeSummonsCorpses;
+        float mActorsProcessingRange;
 
     };
 }

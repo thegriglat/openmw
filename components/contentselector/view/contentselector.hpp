@@ -15,7 +15,6 @@ namespace ContentSelectorView
         Q_OBJECT
 
         QMenu *mContextMenu;
-        QStringList mFilePaths;
 
     protected:
 
@@ -33,6 +32,7 @@ namespace ContentSelectorView
         void setProfileContent (const QStringList &fileList);
 
         void clearCheckStates();
+        void setEncoding (const QString &encoding);
         void setContentList(const QStringList &list);
 
         ContentSelectorModel::ContentFileList selectedFiles() const;
@@ -61,6 +61,7 @@ namespace ContentSelectorView
         void signalCurrentGamefileIndexChanged (int);
 
         void signalAddonDataChanged (const QModelIndex& topleft, const QModelIndex& bottomright);
+        void signalSelectedFilesChanged(QStringList selectedFiles);
 
     private slots:
 
@@ -69,6 +70,7 @@ namespace ContentSelectorView
         void slotShowContextMenu(const QPoint& pos);
         void slotCheckMultiSelectedItems();
         void slotUncheckMultiSelectedItems();
+        void slotCopySelectedItemsPaths();
     };
 }
 

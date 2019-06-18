@@ -1,5 +1,6 @@
 #include "charactermanager.hpp"
 
+#include <cctype>
 #include <sstream>
 
 #include <boost/filesystem.hpp>
@@ -46,7 +47,7 @@ void MWState::CharacterManager::deleteSlot(const MWState::Character *character, 
         // All slots deleted, cleanup and remove this character
         it->cleanup();
         if (character == mCurrent)
-            mCurrent = NULL;
+            mCurrent = nullptr;
         mCharacters.erase(it);
     }
 }
@@ -58,7 +59,7 @@ MWState::Character* MWState::CharacterManager::createCharacter(const std::string
     // The character name is user-supplied, so we need to escape the path
     for (std::string::const_iterator it = name.begin(); it != name.end(); ++it)
     {
-        if (isalnum(*it)) // Ignores multibyte characters and non alphanumeric characters
+        if (std::isalnum(*it)) // Ignores multibyte characters and non alphanumeric characters
             stream << *it;
         else
             stream << "_";
@@ -96,7 +97,7 @@ std::list<MWState::Character>::iterator MWState::CharacterManager::findCharacter
 void MWState::CharacterManager::setCurrentCharacter (const Character *character)
 {
     if (!character)
-        mCurrent = NULL;
+        mCurrent = nullptr;
     else
     {
         std::list<Character>::iterator it = findCharacter(character);

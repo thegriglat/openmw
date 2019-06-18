@@ -1,10 +1,11 @@
 #include "scriptmanagerimp.hpp"
 
 #include <cassert>
-#include <iostream>
 #include <sstream>
 #include <exception>
 #include <algorithm>
+
+#include <components/debug/debuglog.hpp>
 
 #include <components/esm/loadscpt.hpp>
 
@@ -24,7 +25,7 @@ namespace MWScript
     ScriptManager::ScriptManager (const MWWorld::ESMStore& store,
         Compiler::Context& compilerContext, int warningsMode,
         const std::vector<std::string>& scriptBlacklist)
-    : mErrorHandler (std::cerr), mStore (store),
+    : mErrorHandler(), mStore (store),
       mCompilerContext (compilerContext), mParser (mErrorHandler, mCompilerContext),
       mOpcodesInstalled (false), mGlobalScripts (store)
     {
@@ -65,14 +66,13 @@ namespace MWScript
             }
             catch (const std::exception& error)
             {
-                std::cerr << "Error: An exception has been thrown: " << error.what() << std::endl;
+                Log(Debug::Error) << "Error: An exception has been thrown: " << error.what();
                 Success = false;
             }
 
             if (!Success)
             {
-                std::cerr
-                    << "Warning: compiling failed: " << name << std::endl;
+                Log(Debug::Error) << "Error: script compiling failed: " << name;
             }
 
             if (Success)
@@ -121,8 +121,8 @@ namespace MWScript
             }
             catch (const std::exception& e)
             {
-                std::cerr << "Execution of script " << name << " failed:" << std::endl;
-                std::cerr << e.what() << std::endl;
+                Log(Debug::Error) << "Execution of script " << name << " failed:";
+                Log(Debug::Error) << e.what();
 
                 iter->second.first.clear(); // don't execute again.
             }

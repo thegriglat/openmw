@@ -12,7 +12,7 @@
 #include <components/esm/loadspel.hpp>
 #include <components/esm/loadweap.hpp>
 
-#include <boost/format.hpp>
+#include <components/misc/stringops.hpp>
 
 std::string bodyPartLabel(int idx)
 {
@@ -651,7 +651,7 @@ std::string ruleFunction(int idx)
 
 std::string bodyPartFlags(int flags)
 {
-    std::string properties = "";
+    std::string properties;
     if (flags == 0) properties += "[None] ";
     if (flags & ESM::BodyPart::BPF_Female) properties += "Female ";
     if (flags & ESM::BodyPart::BPF_NotPlayable) properties += "NotPlayable ";
@@ -659,13 +659,13 @@ std::string bodyPartFlags(int flags)
                   (ESM::BodyPart::BPF_Female|
                    ESM::BodyPart::BPF_NotPlayable));
     if (flags & unused) properties += "Invalid ";
-    properties += str(boost::format("(0x%08X)") % flags);
+    properties += Misc::StringUtils::format("(0x%08X)", flags);
     return properties;
 }
 
 std::string cellFlags(int flags)
 {
-    std::string properties = "";
+    std::string properties;
     if (flags == 0) properties += "[None] ";
     if (flags & ESM::Cell::HasWater) properties += "HasWater ";
     if (flags & ESM::Cell::Interior) properties += "Interior ";
@@ -680,13 +680,13 @@ std::string cellFlags(int flags)
                    ESM::Cell::QuasiEx|
                    0x00000040));
     if (flags & unused) properties += "Invalid ";
-    properties += str(boost::format("(0x%08X)") % flags);
+    properties += Misc::StringUtils::format("(0x%08X)", flags);
     return properties;
 }
 
 std::string containerFlags(int flags)
 {
-    std::string properties = "";
+    std::string properties;
     if (flags == 0) properties += "[None] ";
     if (flags & ESM::Container::Unknown) properties += "Unknown ";
     if (flags & ESM::Container::Organic) properties += "Organic ";
@@ -696,43 +696,39 @@ std::string containerFlags(int flags)
                    ESM::Container::Organic|
                    ESM::Container::Respawn));
     if (flags & unused) properties += "Invalid ";
-    properties += str(boost::format("(0x%08X)") % flags);
+    properties += Misc::StringUtils::format("(0x%08X)", flags);
     return properties;
 }
 
 std::string creatureFlags(int flags)
 {
-    std::string properties = "";
+    std::string properties;
     if (flags == 0) properties += "[None] ";
-    if (flags & ESM::Creature::None) properties += "All ";
+    if (flags & ESM::Creature::Base) properties += "Base ";
     if (flags & ESM::Creature::Walks) properties += "Walks ";
     if (flags & ESM::Creature::Swims) properties += "Swims ";
     if (flags & ESM::Creature::Flies) properties += "Flies ";
     if (flags & ESM::Creature::Bipedal) properties += "Bipedal ";
     if (flags & ESM::Creature::Respawn) properties += "Respawn ";
     if (flags & ESM::Creature::Weapon) properties += "Weapon ";
-    if (flags & ESM::Creature::Skeleton) properties += "Skeleton ";
-    if (flags & ESM::Creature::Metal) properties += "Metal ";
     if (flags & ESM::Creature::Essential) properties += "Essential ";
-    int unused = (0xFFFFFFFF ^
-                  (ESM::Creature::None|
+    int unused = (0xFF ^
+                  (ESM::Creature::Base|
                    ESM::Creature::Walks|
                    ESM::Creature::Swims|
                    ESM::Creature::Flies|
                    ESM::Creature::Bipedal|
                    ESM::Creature::Respawn|
                    ESM::Creature::Weapon|
-                   ESM::Creature::Skeleton|
-                   ESM::Creature::Metal|
                    ESM::Creature::Essential));
     if (flags & unused) properties += "Invalid ";
-    properties += str(boost::format("(0x%08X)") % flags);
+    properties += Misc::StringUtils::format("(0x%02X)", flags);
     return properties;
 }
 
 std::string landFlags(int flags)
 {
-    std::string properties = "";
+    std::string properties;
     // The ESM component says that this first four bits are used, but
     // only the first three bits are used as far as I can tell.
     // There's also no enumeration of the bit in the ESM component.
@@ -741,13 +737,13 @@ std::string landFlags(int flags)
     if (flags & 0x00000004) properties += "Unknown3 ";
     if (flags & 0x00000002) properties += "Unknown2 ";
     if (flags & 0xFFFFFFF8) properties += "Invalid ";
-    properties += str(boost::format("(0x%08X)") % flags);
+    properties += Misc::StringUtils::format("(0x%08X)", flags);
     return properties;
 }
 
 std::string itemListFlags(int flags)
 {
-    std::string properties = "";
+    std::string properties;
     if (flags == 0) properties += "[None] ";
     if (flags & ESM::ItemLevList::AllLevels) properties += "AllLevels ";
     if (flags & ESM::ItemLevList::Each) properties += "Each ";
@@ -755,18 +751,18 @@ std::string itemListFlags(int flags)
                   (ESM::ItemLevList::AllLevels|
                    ESM::ItemLevList::Each));
     if (flags & unused) properties += "Invalid ";
-    properties += str(boost::format("(0x%08X)") % flags);
+    properties += Misc::StringUtils::format("(0x%08X)", flags);
     return properties;
 }
 
 std::string creatureListFlags(int flags)
 {
-    std::string properties = "";
+    std::string properties;
     if (flags == 0) properties += "[None] ";
     if (flags & ESM::CreatureLevList::AllLevels) properties += "AllLevels ";
     int unused = (0xFFFFFFFF ^ ESM::CreatureLevList::AllLevels);
     if (flags & unused) properties += "Invalid ";
-    properties += str(boost::format("(0x%08X)") % flags);
+    properties += Misc::StringUtils::format("(0x%08X)", flags);
     return properties;
 }
 
@@ -794,13 +790,13 @@ std::string lightFlags(int flags)
                    ESM::Light::Negative|
                    ESM::Light::OffDefault));
     if (flags & unused) properties += "Invalid ";
-    properties += str(boost::format("(0x%08X)") % flags);
+    properties += Misc::StringUtils::format("(0x%08X)", flags);
     return properties;
 }
 
 std::string magicEffectFlags(int flags)
 {
-    std::string properties = "";
+    std::string properties;
     if (flags == 0) properties += "[None] ";
     if (flags & ESM::MagicEffect::TargetAttribute) properties += "TargetAttribute ";
     if (flags & ESM::MagicEffect::TargetSkill) properties += "TargetSkill ";
@@ -820,47 +816,35 @@ std::string magicEffectFlags(int flags)
     if (flags & ESM::MagicEffect::NegativeLight) properties += "NegativeLight ";
 
     if (flags & 0xFFFC0000) properties += "Invalid ";
-    properties += str(boost::format("(0x%08X)") % flags);
+    properties += Misc::StringUtils::format("(0x%08X)", flags);
     return properties;
 }
 
 std::string npcFlags(int flags)
 {
-    std::string properties = "";
+    std::string properties;
     if (flags == 0) properties += "[None] ";
-    // Mythicmods and the ESM component differ.  Mythicmods says
-    // 0x8=None and 0x10=AutoCalc, while our code previously defined
-    // 0x8 as AutoCalc.  The former seems to be correct.  All Bethesda
-    // records have bit 0x8 set.  Previously, suspiciously large portion
-    // of females had autocalc turned off.
-    if (flags & 0x00000008) properties += "Unknown ";
+    if (flags & ESM::NPC::Base) properties += "Base ";
     if (flags & ESM::NPC::Autocalc) properties += "Autocalc ";
     if (flags & ESM::NPC::Female) properties += "Female ";
     if (flags & ESM::NPC::Respawn) properties += "Respawn ";
     if (flags & ESM::NPC::Essential) properties += "Essential ";
-    // These two flags do not appear on any NPCs and may have been
-    // confused with the flags for creatures.
-    if (flags & ESM::NPC::Skeleton) properties += "Skeleton ";
-    if (flags & ESM::NPC::Metal) properties += "Metal ";
     // Whether corpses persist is a bit that is unaccounted for,
-    // however the only unknown bit occurs on ALL records, and
-    // relatively few NPCs have this bit set.
-    int unused = (0xFFFFFFFF ^
-                  (0x00000008|
+    // however relatively few NPCs have this bit set.
+    int unused = (0xFF ^
+                  (ESM::NPC::Base|
                    ESM::NPC::Autocalc|
                    ESM::NPC::Female|
                    ESM::NPC::Respawn|
-                   ESM::NPC::Essential|
-                   ESM::NPC::Skeleton|
-                   ESM::NPC::Metal));
+                   ESM::NPC::Essential));
     if (flags & unused) properties += "Invalid ";
-    properties += str(boost::format("(0x%08X)") % flags);
+    properties += Misc::StringUtils::format("(0x%02X)", flags);
     return properties;
 }
 
 std::string raceFlags(int flags)
 {
-    std::string properties = "";
+    std::string properties;
     if (flags == 0) properties += "[None] ";
     // All races have the playable flag set in Bethesda files.
     if (flags & ESM::Race::Playable) properties += "Playable ";
@@ -869,13 +853,13 @@ std::string raceFlags(int flags)
                   (ESM::Race::Playable|
                    ESM::Race::Beast));
     if (flags & unused) properties += "Invalid ";
-    properties += str(boost::format("(0x%08X)") % flags);
+    properties += Misc::StringUtils::format("(0x%08X)", flags);
     return properties;
 }
 
 std::string spellFlags(int flags)
 {
-    std::string properties = "";
+    std::string properties;
     if (flags == 0) properties += "[None] ";
     if (flags & ESM::Spell::F_Autocalc) properties += "Autocalc ";
     if (flags & ESM::Spell::F_PCStart) properties += "PCStart ";
@@ -885,13 +869,13 @@ std::string spellFlags(int flags)
                    ESM::Spell::F_PCStart|
                    ESM::Spell::F_Always));
     if (flags & unused) properties += "Invalid ";
-    properties += str(boost::format("(0x%08X)") % flags);
+    properties += Misc::StringUtils::format("(0x%08X)", flags);
     return properties;
 }
 
 std::string weaponFlags(int flags)
 {
-    std::string properties = "";
+    std::string properties;
     if (flags == 0) properties += "[None] ";
     // The interpretation of the flags are still unclear to me.
     // Apparently you can't be Silver without being Magical?  Many of
@@ -902,6 +886,6 @@ std::string weaponFlags(int flags)
                   (ESM::Weapon::Magical|
                    ESM::Weapon::Silver));
     if (flags & unused) properties += "Invalid ";
-    properties += str(boost::format("(0x%08X)") % flags);
+    properties += Misc::StringUtils::format("(0x%08X)", flags);
     return properties;
 }

@@ -3,8 +3,6 @@
 #include "esmreader.hpp"
 #include "esmwriter.hpp"
 
-#include "defs.hpp"
-
 #include <memory>
 
 namespace ESM
@@ -35,17 +33,21 @@ namespace AiSequence
     void AiTravel::load(ESMReader &esm)
     {
         esm.getHNT (mData, "DATA");
+        esm.getHNOT (mHidden, "HIDD");
     }
 
     void AiTravel::save(ESMWriter &esm) const
     {
         esm.writeHNT ("DATA", mData);
+        esm.writeHNT ("HIDD", mHidden);
     }
 
     void AiEscort::load(ESMReader &esm)
     {
         esm.getHNT (mData, "DATA");
         mTargetId = esm.getHNString("TARG");
+        mTargetActorId = -1;
+        esm.getHNOT (mTargetActorId, "TAID");
         esm.getHNT (mRemainingDuration, "DURA");
         mCellId = esm.getHNOString ("CELL");
     }
@@ -54,6 +56,7 @@ namespace AiSequence
     {
         esm.writeHNT ("DATA", mData);
         esm.writeHNString ("TARG", mTargetId);
+        esm.writeHNT ("TAID", mTargetActorId);
         esm.writeHNT ("DURA", mRemainingDuration);
         if (!mCellId.empty())
             esm.writeHNString ("CELL", mCellId);
@@ -63,6 +66,8 @@ namespace AiSequence
     {
         esm.getHNT (mData, "DATA");
         mTargetId = esm.getHNString("TARG");
+        mTargetActorId = -1;
+        esm.getHNOT (mTargetActorId, "TAID");
         esm.getHNT (mRemainingDuration, "DURA");
         mCellId = esm.getHNOString ("CELL");
         esm.getHNT (mAlwaysFollow, "ALWY");
@@ -76,6 +81,7 @@ namespace AiSequence
     {
         esm.writeHNT ("DATA", mData);
         esm.writeHNString("TARG", mTargetId);
+        esm.writeHNT ("TAID", mTargetActorId);
         esm.writeHNT ("DURA", mRemainingDuration);
         if (!mCellId.empty())
             esm.writeHNString ("CELL", mCellId);
@@ -154,6 +160,8 @@ namespace AiSequence
                 break;
             }
         }
+
+        esm.writeHNT ("LAST", mLastAiPackage);
     }
 
     void AiSequence::load(ESMReader &esm)
@@ -221,6 +229,8 @@ namespace AiSequence
                 return;
             }
         }
+
+        esm.getHNOT (mLastAiPackage, "LAST");
     }
 }
 }

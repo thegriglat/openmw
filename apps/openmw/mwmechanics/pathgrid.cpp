@@ -8,7 +8,7 @@
 
 namespace
 {
-    // See http://theory.stanford.edu/~amitp/GameProgramming/Heuristics.html
+    // See https://theory.stanford.edu/~amitp/GameProgramming/Heuristics.html
     //
     // One of the smallest cost in Seyda Neen is between points 77 & 78:
     // pt      x     y
@@ -50,8 +50,8 @@ namespace
 namespace MWMechanics
 {
     PathgridGraph::PathgridGraph(const MWWorld::CellStore *cell)
-        : mCell(NULL)
-        , mPathgrid(NULL)
+        : mCell(nullptr)
+        , mPathgrid(nullptr)
         , mIsExterior(0)
         , mGraph(0)
         , mIsGraphConstructed(false)
@@ -257,10 +257,9 @@ namespace MWMechanics
      *       pathgrid points form (currently they are converted to world
      *       coordinates).  Essentially trading speed w/ memory.
      */
-    std::list<ESM::Pathgrid::Point> PathgridGraph::aStarSearch(const int start,
-                                                               const int goal) const
+    std::deque<ESM::Pathgrid::Point> PathgridGraph::aStarSearch(const int start, const int goal) const
     {
-        std::list<ESM::Pathgrid::Point> path;
+        std::deque<ESM::Pathgrid::Point> path;
         if(!isPointConnected(start, goal))
         {
             return path; // there is no path, return an empty path

@@ -4,7 +4,6 @@
 
 #include "../mwbase/environment.hpp"
 #include "../mwbase/world.hpp"
-#include "../mwbase/mechanicsmanager.hpp"
 #include "../mwbase/soundmanager.hpp"
 
 #include "../mwmechanics/creaturestats.hpp"
@@ -31,7 +30,7 @@ namespace MWClass
         if (!model.empty())
         {
             physics.addActor(ptr, model);
-            if (getCreatureStats(ptr).isDead())
+            if (getCreatureStats(ptr).isDead() && getCreatureStats(ptr).isDeathAnimationFinished())
                 MWBase::Environment::get().getWorld()->enableActorCollision(ptr, false);
         }
     }

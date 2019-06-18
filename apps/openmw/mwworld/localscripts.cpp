@@ -1,13 +1,11 @@
 #include "localscripts.hpp"
 
-#include <iostream>
+#include <components/debug/debuglog.hpp>
 
 #include "esmstore.hpp"
 #include "cellstore.hpp"
-
 #include "class.hpp"
 #include "containerstore.hpp"
-
 
 namespace
 {
@@ -44,6 +42,11 @@ namespace
 
         bool operator()(const MWWorld::Ptr& containerPtr)
         {
+            // Ignore containers without generated content
+            if (containerPtr.getTypeName() == typeid(ESM::Container).name() &&
+                containerPtr.getRefData().getCustomData() == nullptr)
+                return false;
+
             MWWorld::ContainerStore& container = containerPtr.getClass().getContainerStore(containerPtr);
             for(MWWorld::ContainerStoreIterator it = container.begin(); it != container.end(); ++it)
             {
@@ -93,7 +96,7 @@ void MWWorld::LocalScripts::add (const std::string& scriptName, const Ptr& ptr)
             for (std::list<std::pair<std::string, Ptr> >::iterator iter = mScripts.begin(); iter!=mScripts.end(); ++iter)
                 if (iter->second==ptr)
                 {
-                    std::cerr << "Error: tried to add local script twice for " << ptr.getCellRef().getRefId() << std::endl;
+                    Log(Debug::Warning) << "Error: tried to add local script twice for " << ptr.getCellRef().getRefId();
                     remove(ptr);
                     break;
                 }
@@ -102,15 +105,15 @@ void MWWorld::LocalScripts::add (const std::string& scriptName, const Ptr& ptr)
         }
         catch (const std::exception& exception)
         {
-            std::cerr
+            Log(Debug::Error)
                 << "failed to add local script " << scriptName
-                << " because an exception has been thrown: " << exception.what() << std::endl;
+                << " because an exception has been thrown: " << exception.what();
         }
     }
     else
-        std::cerr
+        Log(Debug::Warning)
             << "failed to add local script " << scriptName
-            << " because the script does not exist." << std::endl;
+            << " because the script does not exist.";
 }
 
 void MWWorld::LocalScripts::addCell (CellStore *cell)

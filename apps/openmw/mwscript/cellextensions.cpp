@@ -4,7 +4,6 @@
 
 #include "../mwworld/esmstore.hpp"
 
-#include <components/compiler/extensions.hpp>
 #include <components/compiler/opcodes.hpp>
 
 #include <components/interpreter/interpreter.hpp>
@@ -46,18 +45,19 @@ namespace MWScript
 
                     ESM::Position pos;
                     MWBase::World *world = MWBase::Environment::get().getWorld();
+                    const MWWorld::Ptr playerPtr = world->getPlayerPtr();
 
                     if (world->findExteriorPosition(cell, pos))
                     {
-                        MWWorld::ActionTeleport("", pos, false).execute(world->getPlayerPtr());
-                        world->fixPosition(world->getPlayerPtr());
+                        MWWorld::ActionTeleport("", pos, false).execute(playerPtr);
+                        world->adjustPosition(playerPtr, false);
                     }
                     else
                     {
                         // Change to interior even if findInteriorPosition()
                         // yields false. In this case position will be zero-point.
                         world->findInteriorPosition(cell, pos);
-                        MWWorld::ActionTeleport(cell, pos, false).execute(world->getPlayerPtr());
+                        MWWorld::ActionTeleport(cell, pos, false).execute(playerPtr);
                     }
                 }
         };
@@ -76,14 +76,15 @@ namespace MWScript
 
                     ESM::Position pos;
                     MWBase::World *world = MWBase::Environment::get().getWorld();
+                    const MWWorld::Ptr playerPtr = world->getPlayerPtr();
 
                     world->indexToPosition (x, y, pos.pos[0], pos.pos[1], true);
                     pos.pos[2] = 0;
 
                     pos.rot[0] = pos.rot[1] = pos.rot[2] = 0;
 
-                    MWWorld::ActionTeleport("", pos, false).execute(world->getPlayerPtr());
-                    world->fixPosition(world->getPlayerPtr());
+                    MWWorld::ActionTeleport("", pos, false).execute(playerPtr);
+                    world->adjustPosition(playerPtr, false);
                 }
         };
 

@@ -4,6 +4,7 @@
 #include <typeinfo>
 #include <stdexcept>
 
+#include <components/debug/debuglog.hpp>
 #include <components/esm/inventorystate.hpp>
 
 #include "../mwbase/environment.hpp"
@@ -47,7 +48,7 @@ namespace
         for (typename MWWorld::CellRefList<T>::List::iterator iter (list.mList.begin());
              iter!=list.mList.end(); ++iter)
         {
-            if (Misc::StringUtils::ciEqual(iter->mBase->mId, id2))
+            if (Misc::StringUtils::ciEqual(iter->mBase->mId, id2) && iter->mData.getCount())
             {
                 MWWorld::Ptr ptr (&*iter, 0);
                 ptr.setContainerStore (store);
@@ -113,7 +114,7 @@ void MWWorld::ContainerStore::storeStates (const CellRefList<T>& collection,
 
 const std::string MWWorld::ContainerStore::sGoldId = "gold_001";
 
-MWWorld::ContainerStore::ContainerStore() : mListener(NULL), mCachedWeight (0), mWeightUpToDate (false) {}
+MWWorld::ContainerStore::ContainerStore() : mListener(nullptr), mCachedWeight (0), mWeightUpToDate (false) {}
 
 MWWorld::ContainerStore::~ContainerStore() {}
 
@@ -245,7 +246,9 @@ bool MWWorld::ContainerStore::stacks(const ConstPtr& ptr1, const ConstPtr& ptr2)
 
         && ptr1.getClass().getRemainingUsageTime(ptr1) == ptr2.getClass().getRemainingUsageTime(ptr2)
 
-        && cls1.getScript(ptr1) == cls2.getScript(ptr2)
+        // Items with scripts never stack
+        && cls1.getScript(ptr1).empty()
+        && cls2.getScript(ptr2).empty()
 
         // item that is already partly used up never stacks
         && (!cls1.hasItemHealth(ptr1) || (
@@ -256,11 +259,7 @@ bool MWWorld::ContainerStore::stacks(const ConstPtr& ptr1, const ConstPtr& ptr2)
 MWWorld::ContainerStoreIterator MWWorld::ContainerStore::add(const std::string &id, int count, const Ptr &actorPtr)
 {
     MWWorld::ManualRef ref(MWBase::Environment::get().getWorld()->getStore(), id, count);
-    // a bit pointless to set owner for the player
-    if (actorPtr != MWMechanics::getPlayer())
-        return add(ref.getPtr(), count, actorPtr, true);
-    else
-        return add(ref.getPtr(), count, actorPtr, false);
+    return add(ref.getPtr(), count, actorPtr, true);
 }
 
 MWWorld::ContainerStoreIterator MWWorld::ContainerStore::add (const Ptr& itemPtr, int count, const Ptr& actorPtr, bool setOwner)
@@ -289,7 +288,7 @@ MWWorld::ContainerStoreIterator MWWorld::ContainerStore::add (const Ptr& itemPtr
     MWWorld::Ptr item = *it;
 
     // we may have copied an item from the world, so reset a few things first
-    item.getRefData().setBaseNode(NULL); // Especially important, otherwise scripts on the item could think that it's actually in a cell
+    item.getRefData().setBaseNode(nullptr); // Especially important, otherwise scripts on the item could think that it's actually in a cell
     ESM::Position pos;
     pos.rot[0] = 0;
     pos.rot[1] = 0;
@@ -309,7 +308,7 @@ MWWorld::ContainerStoreIterator MWWorld::ContainerStore::add (const Ptr& itemPtr
     item.getCellRef().unsetRefNum(); // destroy link to content file
 
     std::string script = item.getClass().getScript(item);
-    if(script != "")
+    if (!script.empty())
     {
         if (actorPtr == player)
         {
@@ -333,7 +332,8 @@ MWWorld::ContainerStoreIterator MWWorld::ContainerStore::add (const Ptr& itemPtr
             item.getRefData().getLocals().setVarByInt(script, "onpcadd", 1);
     }
 
-    if (mListener)
+    // we should not fire event for InventoryStore yet - it has some custom logic
+    if (mListener && !actorPtr.getClass().hasInventoryStore(actorPtr))
         mListener->itemAdded(item, count);
 
     return it;
@@ -422,6 +422,17 @@ int MWWorld::ContainerStore::remove(const std::string& itemId, int count, const 
     return count - toRemove;
 }
 
+bool MWWorld::ContainerStore::hasVisibleItems() const
+{
+    for (auto iter(begin()); iter != end(); ++iter)
+    {
+        if (iter->getClass().showsInInventory(*iter))
+            return true;
+    }
+
+    return false;
+}
+
 int MWWorld::ContainerStore::remove(const Ptr& item, int count, const Ptr& actor)
 {
     assert(this == item.getContainerStore());
@@ -442,7 +453,8 @@ int MWWorld::ContainerStore::remove(const Ptr& item, int count, const Ptr& actor
 
     flagAsModified();
 
-    if (mListener)
+    // we should not fire event for InventoryStore yet - it has some custom logic
+    if (mListener && !actor.getClass().hasInventoryStore(actor))
         mListener->itemRemoved(item, count - toRemove);
 
     // number of removed items
@@ -506,7 +518,7 @@ void MWWorld::ContainerStore::addInitialItem (const std::string& id, const std::
     }
     catch (const std::exception& e)
     {
-        std::cerr << "Warning: MWWorld::ContainerStore::addInitialItem: " << e.what() << std::endl;
+        Log(Debug::Warning) << "Warning: MWWorld::ContainerStore::addInitialItem: " << e.what();
     }
 
 }
@@ -679,6 +691,30 @@ int MWWorld::ContainerStore::getType (const ConstPtr& ptr)
         "Object '" + ptr.getCellRef().getRefId() + "' of type " + ptr.getTypeName() + " can not be placed into a container");
 }
 
+MWWorld::Ptr MWWorld::ContainerStore::findReplacement(const std::string& id)
+{
+    MWWorld::Ptr item;
+    int itemHealth = 1;
+    for (MWWorld::ContainerStoreIterator iter = begin(); iter != end(); ++iter)
+    {
+        int iterHealth = iter->getClass().hasItemHealth(*iter) ? iter->getClass().getItemHealth(*iter) : 1;
+        if (Misc::StringUtils::ciEqual(iter->getCellRef().getRefId(), id))
+        {
+            // Prefer the stack with the lowest remaining uses
+            // Try to get item with zero durability only if there are no other items found
+            if (item.isEmpty() ||
+                (iterHealth > 0 && iterHealth < itemHealth) ||
+                (itemHealth <= 0 && iterHealth > 0))
+            {
+                item = *iter;
+                itemHealth = iterHealth;
+            }
+        }
+    }
+
+    return item;
+}
+
 MWWorld::Ptr MWWorld::ContainerStore::search (const std::string& id)
 {
     {
@@ -806,10 +842,10 @@ void MWWorld::ContainerStore::readState (const ESM::InventoryState& inventory)
             case ESM::REC_WEAP: readEquipmentState (getState (weapons, state), thisIndex, inventory); break;
             case ESM::REC_LIGH: readEquipmentState (getState (lights, state), thisIndex, inventory); break;
             case 0:
-                std::cerr << "Dropping inventory reference to '" << state.mRef.mRefID << "' (object no longer exists)" << std::endl;
+                Log(Debug::Warning) << "Dropping inventory reference to '" << state.mRef.mRefID << "' (object no longer exists)";
                 break;
             default:
-                std::cerr << "Warning: Invalid item type in inventory state, refid " << state.mRef.mRefID << std::endl;
+                Log(Debug::Warning) << "Warning: Invalid item type in inventory state, refid " << state.mRef.mRefID;
                 break;
         }
     }

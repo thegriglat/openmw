@@ -1,6 +1,5 @@
 #include "renderingmanager.hpp"
 
-#include <stdexcept>
 #include <limits>
 #include <cstdlib>
 
@@ -12,16 +11,23 @@
 #include <osg/Group>
 #include <osg/UserDataContainer>
 #include <osg/ComputeBoundsVisitor>
+#include <osg/ShapeDrawable>
+#include <osg/TextureCubeMap>
 
 #include <osgUtil/LineSegmentIntersector>
 #include <osgUtil/IncrementalCompileOperation>
 
+#include <osg/ImageUtils>
+
 #include <osgViewer/Viewer>
+
+#include <components/debug/debuglog.hpp>
 
 #include <components/resource/resourcesystem.hpp>
 #include <components/resource/imagemanager.hpp>
 #include <components/resource/scenemanager.hpp>
 #include <components/resource/keyframemanager.hpp>
+#include <components/shader/shadermanager.hpp>
 
 #include <components/settings/settings.hpp>
 
@@ -32,6 +38,7 @@
 #include <components/sceneutil/workqueue.hpp>
 #include <components/sceneutil/unrefqueue.hpp>
 #include <components/sceneutil/writescene.hpp>
+#include <components/sceneutil/shadow.hpp>
 
 #include <components/terrain/terraingrid.hpp>
 #include <components/terrain/quadtreeworld.hpp>
@@ -39,7 +46,15 @@
 #include <components/esm/loadcell.hpp>
 #include <components/fallback/fallback.hpp>
 
+#include <components/detournavigator/navigator.hpp>
+
+#include <boost/algorithm/string.hpp>
+
 #include "../mwworld/cellstore.hpp"
+#include "../mwworld/class.hpp"
+#include "../mwgui/loadingscreen.hpp"
+#include "../mwbase/environment.hpp"
+#include "../mwbase/windowmanager.hpp"
 
 #include "sky.hpp"
 #include "effectmanager.hpp"
@@ -50,6 +65,18 @@
 #include "water.hpp"
 #include "terrainstorage.hpp"
 #include "util.hpp"
+#include "navmesh.hpp"
+#include "actorspaths.hpp"
+
+namespace
+{
+    float DLLandFogStart;
+    float DLLandFogEnd;
+    float DLUnderwaterFogStart;
+    float DLUnderwaterFogEnd;
+    float DLInteriorFogStart;
+    float DLInteriorFogEnd;
+}
 
 namespace MWRender
 {
@@ -166,27 +193,34 @@ namespace MWRender
         Resource::ResourceSystem* mResourceSystem;
     };
 
-    RenderingManager::RenderingManager(osgViewer::Viewer* viewer, osg::ref_ptr<osg::Group> rootNode, Resource::ResourceSystem* resourceSystem, SceneUtil::WorkQueue* workQueue,
-                                       const Fallback::Map* fallback, const std::string& resourcePath)
+    RenderingManager::RenderingManager(osgViewer::Viewer* viewer, osg::ref_ptr<osg::Group> rootNode,
+                                       Resource::ResourceSystem* resourceSystem, SceneUtil::WorkQueue* workQueue,
+                                       const std::string& resourcePath, DetourNavigator::Navigator& navigator)
         : mViewer(viewer)
         , mRootNode(rootNode)
         , mResourceSystem(resourceSystem)
         , mWorkQueue(workQueue)
         , mUnrefQueue(new SceneUtil::UnrefQueue)
-        , mFogDepth(0.f)
-        , mUnderwaterColor(fallback->getFallbackColour("Water_UnderwaterColor"))
-        , mUnderwaterWeight(fallback->getFallbackFloat("Water_UnderwaterColorWeight"))
-        , mUnderwaterFog(0.f)
-        , mUnderwaterIndoorFog(fallback->getFallbackFloat("Water_UnderwaterIndoorFog"))
+        , mNavigator(navigator)
+        , mLandFogStart(0.f)
+        , mLandFogEnd(std::numeric_limits<float>::max())
+        , mUnderwaterFogStart(0.f)
+        , mUnderwaterFogEnd(std::numeric_limits<float>::max())
+        , mUnderwaterColor(Fallback::Map::getColour("Water_UnderwaterColor"))
+        , mUnderwaterWeight(Fallback::Map::getFloat("Water_UnderwaterColorWeight"))
+        , mUnderwaterIndoorFog(Fallback::Map::getFloat("Water_UnderwaterIndoorFog"))
         , mNightEyeFactor(0.f)
-        , mFieldOfViewOverride(0.f)
+        , mDistantFog(false)
+        , mDistantTerrain(false)
         , mFieldOfViewOverridden(false)
+        , mFieldOfViewOverride(0.f)
+        , mBorders(false)
     {
         resourceSystem->getSceneManager()->setParticleSystemMask(MWRender::Mask_ParticleSystem);
         resourceSystem->getSceneManager()->setShaderPath(resourcePath + "/shaders");
-        resourceSystem->getSceneManager()->setForceShaders(Settings::Manager::getBool("force shaders", "Shaders"));
+        resourceSystem->getSceneManager()->setForceShaders(Settings::Manager::getBool("force shaders", "Shaders") || Settings::Manager::getBool("enable shadows", "Shadows")); // Shadows have problems with fixed-function mode
+        // FIXME: calling dummy method because terrain needs to know whether lighting is clamped
         resourceSystem->getSceneManager()->setClampLighting(Settings::Manager::getBool("clamp lighting", "Shaders"));
-        resourceSystem->getSceneManager()->setForcePerPixelLighting(Settings::Manager::getBool("force per pixel lighting", "Shaders"));
         resourceSystem->getSceneManager()->setAutoUseNormalMaps(Settings::Manager::getBool("auto use object normal maps", "Shaders"));
         resourceSystem->getSceneManager()->setNormalMapPattern(Settings::Manager::getString("normal map pattern", "Shaders"));
         resourceSystem->getSceneManager()->setNormalHeightMapPattern(Settings::Manager::getString("normal height map pattern", "Shaders"));
@@ -198,31 +232,88 @@ namespace MWRender
         mSceneRoot = sceneRoot;
         sceneRoot->setStartLight(1);
 
-        mRootNode->addChild(sceneRoot);
+        int shadowCastingTraversalMask = Mask_Scene;
+        if (Settings::Manager::getBool("actor shadows", "Shadows"))
+            shadowCastingTraversalMask |= Mask_Actor;
+        if (Settings::Manager::getBool("player shadows", "Shadows"))
+            shadowCastingTraversalMask |= Mask_Player;
+        if (Settings::Manager::getBool("terrain shadows", "Shadows"))
+            shadowCastingTraversalMask |= Mask_Terrain;
 
+        int indoorShadowCastingTraversalMask = shadowCastingTraversalMask;
+        if (Settings::Manager::getBool("object shadows", "Shadows"))
+            shadowCastingTraversalMask |= (Mask_Object|Mask_Static);
+
+        mShadowManager.reset(new SceneUtil::ShadowManager(sceneRoot, mRootNode, shadowCastingTraversalMask, indoorShadowCastingTraversalMask, mResourceSystem->getSceneManager()->getShaderManager()));
+
+        Shader::ShaderManager::DefineMap shadowDefines = mShadowManager->getShadowDefines();
+        Shader::ShaderManager::DefineMap globalDefines = mResourceSystem->getSceneManager()->getShaderManager().getGlobalDefines();
+
+        for (auto itr = shadowDefines.begin(); itr != shadowDefines.end(); itr++)
+            globalDefines[itr->first] = itr->second;
+
+        globalDefines["forcePPL"] = Settings::Manager::getBool("force per pixel lighting", "Shaders") ? "1" : "0";
+        globalDefines["clamp"] = Settings::Manager::getBool("clamp lighting", "Shaders") ? "1" : "0";
+
+        // It is unnecessary to stop/start the viewer as no frames are being rendered yet.
+        mResourceSystem->getSceneManager()->getShaderManager().setGlobalDefines(globalDefines);
+
+        mNavMesh.reset(new NavMesh(mRootNode, Settings::Manager::getBool("enable nav mesh render", "Navigator")));
+        mActorsPaths.reset(new ActorsPaths(mRootNode, Settings::Manager::getBool("enable agents paths render", "Navigator")));
         mPathgrid.reset(new Pathgrid(mRootNode));
 
         mObjects.reset(new Objects(mResourceSystem, sceneRoot, mUnrefQueue.get()));
 
-        if (getenv("OPENMW_DONT_PRECOMPILE") == NULL)
+        if (getenv("OPENMW_DONT_PRECOMPILE") == nullptr)
+        {
             mViewer->setIncrementalCompileOperation(new osgUtil::IncrementalCompileOperation);
+            mViewer->getIncrementalCompileOperation()->setTargetFrameRate(Settings::Manager::getFloat("target framerate", "Cells"));
+            mViewer->getIncrementalCompileOperation()->setMaximumNumOfObjectsToCompilePerFrame(100);
+        }
 
         mResourceSystem->getSceneManager()->setIncrementalCompileOperation(mViewer->getIncrementalCompileOperation());
 
         mEffectManager.reset(new EffectManager(sceneRoot, mResourceSystem));
 
-        mWater.reset(new Water(mRootNode, sceneRoot, mResourceSystem, mViewer->getIncrementalCompileOperation(), fallback, resourcePath));
+        mWater.reset(new Water(mRootNode, sceneRoot, mResourceSystem, mViewer->getIncrementalCompileOperation(), resourcePath));
 
-        const bool distantTerrain = Settings::Manager::getBool("distant terrain", "Terrain");
-        mTerrainStorage = new TerrainStorage(mResourceSystem, Settings::Manager::getString("normal map pattern", "Shaders"), Settings::Manager::getString("normal height map pattern", "Shaders"),
-                                            Settings::Manager::getBool("auto use terrain normal maps", "Shaders"), Settings::Manager::getString("terrain specular map pattern", "Shaders"),
-                                             Settings::Manager::getBool("auto use terrain specular maps", "Shaders"));
+        DLLandFogStart = Settings::Manager::getFloat("distant land fog start", "Fog");
+        DLLandFogEnd = Settings::Manager::getFloat("distant land fog end", "Fog");
+        DLUnderwaterFogStart = Settings::Manager::getFloat("distant underwater fog start", "Fog");
+        DLUnderwaterFogEnd = Settings::Manager::getFloat("distant underwater fog end", "Fog");
+        DLInteriorFogStart = Settings::Manager::getFloat("distant interior fog start", "Fog");
+        DLInteriorFogEnd = Settings::Manager::getFloat("distant interior fog end", "Fog");
 
-        if (distantTerrain)
-            mTerrain.reset(new Terrain::QuadTreeWorld(sceneRoot, mRootNode, mResourceSystem, mTerrainStorage, Mask_Terrain, Mask_PreCompile));
+        mDistantFog = Settings::Manager::getBool("use distant fog", "Fog");
+        mDistantTerrain = Settings::Manager::getBool("distant terrain", "Terrain");
+
+        const std::string normalMapPattern = Settings::Manager::getString("normal map pattern", "Shaders");
+        const std::string heightMapPattern = Settings::Manager::getString("normal height map pattern", "Shaders");
+        const std::string specularMapPattern = Settings::Manager::getString("terrain specular map pattern", "Shaders");
+        const bool useTerrainNormalMaps = Settings::Manager::getBool("auto use terrain normal maps", "Shaders");
+        const bool useTerrainSpecularMaps = Settings::Manager::getBool("auto use terrain specular maps", "Shaders");
+
+        mTerrainStorage = new TerrainStorage(mResourceSystem, normalMapPattern, heightMapPattern, useTerrainNormalMaps, specularMapPattern, useTerrainSpecularMaps);
+
+        if (mDistantTerrain)
+        {
+            const int compMapResolution = Settings::Manager::getInt("composite map resolution", "Terrain");
+            int compMapPower = Settings::Manager::getInt("composite map level", "Terrain");
+            compMapPower = std::max(-3, compMapPower);
+            float compMapLevel = pow(2, compMapPower);
+            const float lodFactor = Settings::Manager::getFloat("lod factor", "Terrain");
+            const int vertexLodMod = Settings::Manager::getInt("vertex lod mod", "Terrain");
+            float maxCompGeometrySize = Settings::Manager::getFloat("max composite geometry size", "Terrain");
+            maxCompGeometrySize = std::max(maxCompGeometrySize, 1.f);
+            mTerrain.reset(new Terrain::QuadTreeWorld(
+                sceneRoot, mRootNode, mResourceSystem, mTerrainStorage, Mask_Terrain, Mask_PreCompile, Mask_Debug,
+                compMapResolution, compMapLevel, lodFactor, vertexLodMod, maxCompGeometrySize));
+        }
         else
-            mTerrain.reset(new Terrain::TerrainGrid(sceneRoot, mRootNode, mResourceSystem, mTerrainStorage, Mask_Terrain, Mask_PreCompile));
-        mTerrain->setDefaultViewer(mViewer->getCamera());
+            mTerrain.reset(new Terrain::TerrainGrid(sceneRoot, mRootNode, mResourceSystem, mTerrainStorage, Mask_Terrain, Mask_PreCompile, Mask_Debug));
+
+        mTerrain->setTargetFrameRate(Settings::Manager::getFloat("target framerate", "Cells"));
+        mTerrain->setWorkQueue(mWorkQueue.get());
 
         mCamera.reset(new Camera(mViewer->getCamera()));
 
@@ -280,8 +371,10 @@ namespace MWRender
 
         mNearClip = Settings::Manager::getFloat("near clip", "Camera");
         mViewDistance = Settings::Manager::getFloat("viewing distance", "Camera");
-        mFieldOfView = Settings::Manager::getFloat("field of view", "Camera");
-        mFirstPersonFieldOfView = Settings::Manager::getFloat("first person field of view", "Camera");
+        float fov = Settings::Manager::getFloat("field of view", "Camera");
+        mFieldOfView = std::min(std::max(1.f, fov), 179.f);
+        float firstPersonFov = Settings::Manager::getFloat("first person field of view", "Camera");
+        mFirstPersonFieldOfView = std::min(std::max(1.f, firstPersonFov), 179.f);
         mStateUpdater->setFogEnd(mViewDistance);
 
         mRootNode->getOrCreateStateSet()->addUniform(new osg::Uniform("near", mNearClip));
@@ -295,7 +388,7 @@ namespace MWRender
     RenderingManager::~RenderingManager()
     {
         // let background loading thread finish before we delete anything else
-        mWorkQueue = NULL;
+        mWorkQueue = nullptr;
     }
 
     MWRender::Objects& RenderingManager::getObjects()
@@ -393,7 +486,7 @@ namespace MWRender
         osg::Vec4f diffuse = SceneUtil::colourFromRGB(cell->mAmbi.mSunlight);
         mSunLight->setDiffuse(diffuse);
         mSunLight->setSpecular(diffuse);
-        mSunLight->setDirection(osg::Vec3f(1.f,-1.f,-1.f));
+        mSunLight->setPosition(osg::Vec4f(-0.15f, 0.15f, 1.f, 0.f));
     }
 
     void RenderingManager::setSunColour(const osg::Vec4f& diffuse, const osg::Vec4f& specular)
@@ -424,6 +517,7 @@ namespace MWRender
     void RenderingManager::removeCell(const MWWorld::CellStore *store)
     {
         mPathgrid->removeCell(store);
+        mActorsPaths->removeCell(store);
         mObjects->removeCell(store);
 
         if (store->getCell()->isExterior())
@@ -440,6 +534,17 @@ namespace MWRender
     void RenderingManager::setSkyEnabled(bool enabled)
     {
         mSky->setEnabled(enabled);
+        if (enabled)
+            mShadowManager->enableOutdoorMode();
+        else
+            mShadowManager->enableIndoorMode();
+    }
+
+    bool RenderingManager::toggleBorders()
+    {
+        mBorders = !mBorders;
+        mTerrain->setBordersVisible(mBorders);
+        return mBorders;
     }
 
     bool RenderingManager::toggleRenderMode(RenderMode mode)
@@ -468,6 +573,14 @@ namespace MWRender
             mViewer->getCamera()->setCullMask(mask);
             return enabled;
         }
+        else if (mode == Render_NavMesh)
+        {
+            return mNavMesh->toggle();
+        }
+        else if (mode == Render_ActorsPaths)
+        {
+            return mActorsPaths->toggle();
+        }
         return false;
     }
 
@@ -475,14 +588,44 @@ namespace MWRender
     {
         osg::Vec4f color = SceneUtil::colourFromRGB(cell->mAmbi.mFog);
 
-        configureFog (cell->mAmbi.mFogDensity, mUnderwaterIndoorFog, color);
+        if(mDistantFog)
+        {
+            float density = std::max(0.2f, cell->mAmbi.mFogDensity);
+            mLandFogStart = (DLInteriorFogEnd*(1.0f-density) + DLInteriorFogStart*density);
+            mLandFogEnd = DLInteriorFogEnd;
+            mUnderwaterFogStart = DLUnderwaterFogStart;
+            mUnderwaterFogEnd = DLUnderwaterFogEnd;
+            mFogColor = color;
+        }
+        else
+            configureFog(cell->mAmbi.mFogDensity, mUnderwaterIndoorFog, 1.0f, 0.0f, color);
     }
 
-    void RenderingManager::configureFog(float fogDepth, float underwaterFog, const osg::Vec4f &color)
+    void RenderingManager::configureFog(float fogDepth, float underwaterFog, float dlFactor, float dlOffset, const osg::Vec4f &color)
     {
-        mFogDepth = fogDepth;
+        if(mDistantFog)
+        {
+            mLandFogStart = dlFactor * (DLLandFogStart - dlOffset*DLLandFogEnd);
+            mLandFogEnd = dlFactor * (1.0f-dlOffset) * DLLandFogEnd;
+            mUnderwaterFogStart = DLUnderwaterFogStart;
+            mUnderwaterFogEnd = DLUnderwaterFogEnd;
+        }
+        else
+        {
+            if(fogDepth == 0.0)
+            {
+                mLandFogStart = 0.0f;
+                mLandFogEnd = std::numeric_limits<float>::max();
+            }
+            else
+            {
+                mLandFogStart = mViewDistance * (1 - fogDepth);
+                mLandFogEnd = mViewDistance;
+            }
+            mUnderwaterFogStart = std::min(mViewDistance, 6666.f) * (1 - underwaterFog);
+            mUnderwaterFogEnd = std::min(mViewDistance, 6666.f);
+        }
         mFogColor = color;
-        mUnderwaterFog = underwaterFog;
     }
 
     SkyManager* RenderingManager::getSkyManager()
@@ -503,6 +646,8 @@ namespace MWRender
             mWater->update(dt);
         }
 
+        updateNavMesh();
+
         mCamera->update(dt, paused);
 
         osg::Vec3f focal, cameraPos;
@@ -510,26 +655,16 @@ namespace MWRender
         mCurrentCameraPos = cameraPos;
         if (mWater->isUnderwater(cameraPos))
         {
-            float viewDistance = mViewDistance;
-            viewDistance = std::min(viewDistance, 6666.f);
             setFogColor(mUnderwaterColor * mUnderwaterWeight + mFogColor * (1.f-mUnderwaterWeight));
-            mStateUpdater->setFogStart(viewDistance * (1 - mUnderwaterFog));
-            mStateUpdater->setFogEnd(viewDistance);
+            mStateUpdater->setFogStart(mUnderwaterFogStart);
+            mStateUpdater->setFogEnd(mUnderwaterFogEnd);
         }
         else
         {
             setFogColor(mFogColor);
 
-            if (mFogDepth == 0.f)
-            {
-                mStateUpdater->setFogStart(0.f);
-                mStateUpdater->setFogEnd(std::numeric_limits<float>::max());
-            }
-            else
-            {
-                mStateUpdater->setFogStart(mViewDistance * (1 - mFogDepth));
-                mStateUpdater->setFogEnd(mViewDistance);
-            }
+            mStateUpdater->setFogStart(mLandFogStart);
+            mStateUpdater->setFogEnd(mLandFogEnd);
         }
     }
 
@@ -574,6 +709,7 @@ namespace MWRender
 
     void RenderingManager::removeObject(const MWWorld::Ptr &ptr)
     {
+        mActorsPaths->remove(ptr);
         mObjects->removeObject(ptr);
         mWater->removeEmitter(ptr);
     }
@@ -620,53 +756,219 @@ namespace MWRender
         mutable bool mDone;
     };
 
-    void RenderingManager::screenshot(osg::Image *image, int w, int h)
+    bool RenderingManager::screenshot360(osg::Image* image, std::string settingStr)
     {
-        osg::ref_ptr<osg::Camera> rttCamera (new osg::Camera);
-        rttCamera->setNodeMask(Mask_RenderToTexture);
-        rttCamera->attach(osg::Camera::COLOR_BUFFER, image);
-        rttCamera->setRenderOrder(osg::Camera::PRE_RENDER);
-        rttCamera->setReferenceFrame(osg::Camera::ABSOLUTE_RF);
-        rttCamera->setRenderTargetImplementation(osg::Camera::FRAME_BUFFER_OBJECT, osg::Camera::PIXEL_BUFFER_RTT);
-        rttCamera->setProjectionMatrixAsPerspective(mFieldOfView, w/float(h), mNearClip, mViewDistance);
-        rttCamera->setViewMatrix(mViewer->getCamera()->getViewMatrix());
-        rttCamera->setViewport(0, 0, w, h);
+        int screenshotW = mViewer->getCamera()->getViewport()->width();
+        int screenshotH = mViewer->getCamera()->getViewport()->height();
+        int screenshotMapping = 0;
+
+        std::vector<std::string> settingArgs;
+        boost::algorithm::split(settingArgs,settingStr,boost::is_any_of(" "));
+
+        if (settingArgs.size() > 0)
+        {
+            std::string typeStrings[4] = {"spherical","cylindrical","planet","cubemap"};
+            bool found = false;
+
+            for (int i = 0; i < 4; ++i)
+                if (settingArgs[0].compare(typeStrings[i]) == 0)
+                {
+                    screenshotMapping = i;
+                    found = true;
+                    break;
+                }
+
+            if (!found)
+            {
+                Log(Debug::Warning) << "Wrong screenshot type: " << settingArgs[0] << ".";
+                return false;
+            }
+        }
+
+        // planet mapping needs higher resolution
+        int cubeSize = screenshotMapping == 2 ? screenshotW : screenshotW / 2;
+
+        if (settingArgs.size() > 1)
+            screenshotW = std::min(10000,std::atoi(settingArgs[1].c_str()));
+
+        if (settingArgs.size() > 2)
+            screenshotH = std::min(10000,std::atoi(settingArgs[2].c_str()));
+
+        if (settingArgs.size() > 3)
+            cubeSize = std::min(5000,std::atoi(settingArgs[3].c_str()));
+
+        if (mCamera->isVanityOrPreviewModeEnabled())
+        {
+            Log(Debug::Warning) << "Spherical screenshots are not allowed in preview mode.";
+            return false;
+        }
+
+        bool rawCubemap = screenshotMapping == 3;
+
+        if (rawCubemap)
+            screenshotW = cubeSize * 6;  // the image will consist of 6 cube sides in a row
+        else if (screenshotMapping == 2)
+            screenshotH = screenshotW;   // use square resolution for planet mapping
+
+        std::vector<osg::ref_ptr<osg::Image>> images;
+
+        for (int i = 0; i < 6; ++i)
+            images.push_back(new osg::Image);
+
+        osg::Vec3 directions[6] = {
+            rawCubemap ? osg::Vec3(1,0,0) : osg::Vec3(0,0,1),
+            osg::Vec3(0,0,-1),
+            osg::Vec3(-1,0,0),
+            rawCubemap ? osg::Vec3(0,0,1) : osg::Vec3(1,0,0),
+            osg::Vec3(0,1,0),
+            osg::Vec3(0,-1,0)};
+
+        double rotations[] = {
+            -osg::PI / 2.0,
+            osg::PI / 2.0,
+            osg::PI,
+            0,
+            osg::PI / 2.0,
+            osg::PI / 2.0};
+
+        double fovBackup = mFieldOfView;
+        mFieldOfView = 90.0;             // each cubemap side sees 90 degrees
+
+        int maskBackup = mPlayerAnimation->getObjectRoot()->getNodeMask();
+
+        if (mCamera->isFirstPerson())
+            mPlayerAnimation->getObjectRoot()->setNodeMask(0);
+
+        for (int i = 0; i < 6; ++i)      // for each cubemap side
+        {
+            osg::Matrixd transform = osg::Matrixd::rotate(osg::Vec3(0,0,-1),directions[i]);
+
+            if (!rawCubemap)
+                transform *= osg::Matrixd::rotate(rotations[i],osg::Vec3(0,0,-1));
+
+            osg::Image *sideImage = images[i].get();
+            screenshot(sideImage,cubeSize,cubeSize,transform);
+
+            if (!rawCubemap)
+                sideImage->flipHorizontal();
+        }
+
+        mPlayerAnimation->getObjectRoot()->setNodeMask(maskBackup);
+        mFieldOfView = fovBackup;
+
+        if (rawCubemap)    // for raw cubemap don't run on GPU, just merge the images
+        {
+            image->allocateImage(cubeSize * 6,cubeSize,images[0]->r(),images[0]->getPixelFormat(),images[0]->getDataType());
+
+            for (int i = 0; i < 6; ++i)
+                osg::copyImage(images[i].get(),0,0,0,images[i]->s(),images[i]->t(),images[i]->r(),image,i * cubeSize,0,0);
+
+            return true;
+        }
+
+        // run on GPU now:
+
+        osg::ref_ptr<osg::TextureCubeMap> cubeTexture (new osg::TextureCubeMap);
+        cubeTexture->setResizeNonPowerOfTwoHint(false);
+
+        cubeTexture->setFilter(osg::Texture::MIN_FILTER,osg::Texture::NEAREST);
+        cubeTexture->setFilter(osg::Texture::MAG_FILTER,osg::Texture::NEAREST);
+
+        cubeTexture->setWrap(osg::Texture::WRAP_S, osg::Texture::CLAMP_TO_EDGE);
+        cubeTexture->setWrap(osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_EDGE);
+
+        for (int i = 0; i < 6; ++i)
+            cubeTexture->setImage(i,images[i].get());
+
+        osg::ref_ptr<osg::Camera> screenshotCamera (new osg::Camera);
+        osg::ref_ptr<osg::ShapeDrawable> quad (new osg::ShapeDrawable(new osg::Box(osg::Vec3(0,0,0),2.0)));
+
+        std::map<std::string, std::string> defineMap;
+
+        Shader::ShaderManager& shaderMgr = mResourceSystem->getSceneManager()->getShaderManager();
+        osg::ref_ptr<osg::Shader> fragmentShader (shaderMgr.getShader("s360_fragment.glsl",defineMap,osg::Shader::FRAGMENT));
+        osg::ref_ptr<osg::Shader> vertexShader (shaderMgr.getShader("s360_vertex.glsl", defineMap, osg::Shader::VERTEX));
+        osg::ref_ptr<osg::StateSet> stateset = new osg::StateSet;
+
+        osg::ref_ptr<osg::Program> program (new osg::Program);
+        program->addShader(fragmentShader);
+        program->addShader(vertexShader);
+        stateset->setAttributeAndModes(program, osg::StateAttribute::ON);
+
+        stateset->addUniform(new osg::Uniform("cubeMap",0));
+        stateset->addUniform(new osg::Uniform("mapping",screenshotMapping));
+        stateset->setTextureAttributeAndModes(0,cubeTexture,osg::StateAttribute::ON);
+
+        quad->setStateSet(stateset);
+        quad->setUpdateCallback(nullptr);
+
+        screenshotCamera->addChild(quad);
+
+        renderCameraToImage(screenshotCamera,image,screenshotW,screenshotH);
+
+        return true;
+    }
+
+    void RenderingManager::renderCameraToImage(osg::Camera *camera, osg::Image *image, int w, int h)
+    {
+        camera->setNodeMask(Mask_RenderToTexture);
+        camera->attach(osg::Camera::COLOR_BUFFER, image);
+        camera->setRenderOrder(osg::Camera::PRE_RENDER);
+        camera->setReferenceFrame(osg::Camera::ABSOLUTE_RF);
+        camera->setRenderTargetImplementation(osg::Camera::FRAME_BUFFER_OBJECT,osg::Camera::PIXEL_BUFFER_RTT);
+
+        camera->setViewport(0, 0, w, h);
 
         osg::ref_ptr<osg::Texture2D> texture (new osg::Texture2D);
         texture->setInternalFormat(GL_RGB);
-        texture->setTextureSize(w, h);
+        texture->setTextureSize(w,h);
         texture->setResizeNonPowerOfTwoHint(false);
         texture->setFilter(osg::Texture::MIN_FILTER, osg::Texture::LINEAR);
         texture->setFilter(osg::Texture::MAG_FILTER, osg::Texture::LINEAR);
-        rttCamera->attach(osg::Camera::COLOR_BUFFER, texture);
+        camera->attach(osg::Camera::COLOR_BUFFER,texture);
 
         image->setDataType(GL_UNSIGNED_BYTE);
         image->setPixelFormat(texture->getInternalFormat());
 
-        rttCamera->setUpdateCallback(new NoTraverseCallback);
-        rttCamera->addChild(mSceneRoot);
-        rttCamera->setCullMask(mViewer->getCamera()->getCullMask() & (~Mask_GUI));
-
-        mRootNode->addChild(rttCamera);
+        mRootNode->addChild(camera);
 
         // The draw needs to complete before we can copy back our image.
         osg::ref_ptr<NotifyDrawCompletedCallback> callback (new NotifyDrawCompletedCallback);
-        rttCamera->setFinalDrawCallback(callback);
+        camera->setFinalDrawCallback(callback);
 
-        // at the time this function is called we are in the middle of a frame,
-        // so out of order calls are necessary to get a correct frameNumber for the next frame.
-        // refer to the advance() and frame() order in Engine::go()
+        MWBase::Environment::get().getWindowManager()->getLoadingScreen()->loadingOn(false);
+
         mViewer->eventTraversal();
         mViewer->updateTraversal();
         mViewer->renderingTraversals();
-
         callback->waitTillDone();
+
+        MWBase::Environment::get().getWindowManager()->getLoadingScreen()->loadingOff();
 
         // now that we've "used up" the current frame, get a fresh framenumber for the next frame() following after the screenshot is completed
         mViewer->advance(mViewer->getFrameStamp()->getSimulationTime());
 
-        rttCamera->removeChildren(0, rttCamera->getNumChildren());
-        mRootNode->removeChild(rttCamera);
+        camera->removeChildren(0, camera->getNumChildren());
+        mRootNode->removeChild(camera);
+    }
+
+    void RenderingManager::screenshot(osg::Image *image, int w, int h, osg::Matrixd cameraTransform)
+    {
+        osg::ref_ptr<osg::Camera> rttCamera (new osg::Camera);
+        rttCamera->setProjectionMatrixAsPerspective(mFieldOfView, w/float(h), mNearClip, mViewDistance);
+        rttCamera->setViewMatrix(mViewer->getCamera()->getViewMatrix() * cameraTransform);
+
+        rttCamera->setUpdateCallback(new NoTraverseCallback);
+        rttCamera->addChild(mSceneRoot);
+
+        rttCamera->addChild(mWater->getReflectionCamera());
+        rttCamera->addChild(mWater->getRefractionCamera());
+
+        rttCamera->setCullMask(mViewer->getCamera()->getCullMask() & (~Mask_GUI));
+
+        rttCamera->setClearMask(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        renderCameraToImage(rttCamera.get(),image,w,h);
     }
 
     osg::Vec4f RenderingManager::getScreenBounds(const MWWorld::Ptr& ptr)
@@ -718,7 +1020,7 @@ namespace MWRender
             result.mHitNormalWorld = intersection.getWorldIntersectNormal();
             result.mRatio = intersection.ratio;
 
-            PtrHolder* ptrHolder = NULL;
+            PtrHolder* ptrHolder = nullptr;
             for (osg::NodePath::const_iterator it = intersection.nodePath.begin(); it != intersection.nodePath.end(); ++it)
             {
                 osg::UserDataContainer* userDataContainer = (*it)->getUserDataContainer();
@@ -791,6 +1093,7 @@ namespace MWRender
     void RenderingManager::updatePtr(const MWWorld::Ptr &old, const MWWorld::Ptr &updated)
     {
         mObjects->updatePtr(old, updated);
+        mActorsPaths->updatePtr(old, updated);
     }
 
     void RenderingManager::spawnEffect(const std::string &model, const std::string &texture, const osg::Vec3f &worldPosition, float scale, bool isMagicVFX)
@@ -856,7 +1159,7 @@ namespace MWRender
 
     void RenderingManager::rebuildPtr(const MWWorld::Ptr &ptr)
     {
-        NpcAnimation *anim = NULL;
+        NpcAnimation *anim = nullptr;
         if(ptr == mPlayerAnimation->getPtr())
             anim = mPlayerAnimation.get();
         else
@@ -897,6 +1200,12 @@ namespace MWRender
 
         mUniformNear->set(mNearClip);
         mUniformFar->set(mViewDistance);
+
+        // Since our fog is not radial yet, we should take FOV in account, otherwise terrain near viewing distance may disappear.
+        // Limit FOV here just for sure, otherwise viewing distance can be too high.
+        fov = std::min(mFieldOfView, 140.f);
+        float distanceMult = std::cos(osg::DegreesToRadians(fov)/2.f);
+        mTerrain->setViewDistance(mViewDistance * (distanceMult ? 1.f/distanceMult : 1.f));
     }
 
     void RenderingManager::updateTextureFiltering()
@@ -956,7 +1265,8 @@ namespace MWRender
             else if (it->first == "Camera" && it->second == "viewing distance")
             {
                 mViewDistance = Settings::Manager::getFloat("viewing distance", "Camera");
-                mStateUpdater->setFogEnd(mViewDistance);
+                if(!mDistantFog)
+                    mStateUpdater->setFogEnd(mViewDistance);
                 updateProjectionMatrix();
             }
             else if (it->first == "General" && (it->second == "texture filter" ||
@@ -1064,6 +1374,29 @@ namespace MWRender
         }
     }
 
+    osg::Vec3f RenderingManager::getHalfExtents(const MWWorld::ConstPtr& object) const
+    {
+        osg::Vec3f halfExtents(0, 0, 0);
+        std::string modelName = object.getClass().getModel(object);
+        if (modelName.empty())
+            return halfExtents;
+
+        osg::ref_ptr<const osg::Node> node = mResourceSystem->getSceneManager()->getTemplate(modelName);
+        osg::ComputeBoundsVisitor computeBoundsVisitor;
+        computeBoundsVisitor.setTraversalMask(~(MWRender::Mask_ParticleSystem|MWRender::Mask_Effect));
+        const_cast<osg::Node*>(node.get())->accept(computeBoundsVisitor);
+        osg::BoundingBox bounds = computeBoundsVisitor.getBoundingBox();
+
+        if (bounds.valid())
+        {
+            halfExtents[0] = std::abs(bounds.xMax() - bounds.xMin()) / 2.f;
+            halfExtents[1] = std::abs(bounds.yMax() - bounds.yMin()) / 2.f;
+            halfExtents[2] = std::abs(bounds.zMax() - bounds.zMin()) / 2.f;
+        }
+
+        return halfExtents;
+    }
+
     void RenderingManager::resetFieldOfView()
     {
         if (mFieldOfViewOverridden == true)
@@ -1087,5 +1420,48 @@ namespace MWRender
         return mTerrainStorage->getLandManager();
     }
 
+    void RenderingManager::updateActorPath(const MWWorld::ConstPtr& actor, const std::deque<osg::Vec3f>& path,
+            const osg::Vec3f& halfExtents, const osg::Vec3f& start, const osg::Vec3f& end) const
+    {
+        mActorsPaths->update(actor, path, halfExtents, start, end, mNavigator.getSettings());
+    }
 
+    void RenderingManager::removeActorPath(const MWWorld::ConstPtr& actor) const
+    {
+        mActorsPaths->remove(actor);
+    }
+
+    void RenderingManager::setNavMeshNumber(const std::size_t value)
+    {
+        mNavMeshNumber = value;
+    }
+
+    void RenderingManager::updateNavMesh()
+    {
+        if (!mNavMesh->isEnabled())
+            return;
+
+        const auto navMeshes = mNavigator.getNavMeshes();
+
+        auto it = navMeshes.begin();
+        for (std::size_t i = 0; it != navMeshes.end() && i < mNavMeshNumber; ++i)
+            ++it;
+        if (it == navMeshes.end())
+        {
+            mNavMesh->reset();
+        }
+        else
+        {
+            try
+            {
+                const auto locked = it->second->lockConst();
+                mNavMesh->update(locked->getImpl(), mNavMeshNumber, locked->getGeneration(),
+                                 locked->getNavMeshRevision(), mNavigator.getSettings());
+            }
+            catch (const std::exception& e)
+            {
+                Log(Debug::Error) << "NavMesh render update exception: " << e.what();
+            }
+        }
+    }
 }

@@ -112,6 +112,9 @@ namespace MWWorld
             virtual int getItemHealth (const ConstPtr& ptr) const;
             ///< Return current item health or throw an exception if class does not have item health
 
+            virtual float getItemNormalizedHealth (const ConstPtr& ptr) const;
+            ///< Return current item health re-scaled to maximum health
+
             virtual int getItemMaxHealth (const ConstPtr& ptr) const;
             ///< Return item max health or throw an exception, if class does not have item health
             /// (default implementation: throw an exception)
@@ -141,7 +144,7 @@ namespace MWWorld
             virtual std::shared_ptr<Action> activate (const Ptr& ptr, const Ptr& actor) const;
             ///< Generate action for activation (default implementation: return a null action).
 
-            virtual std::shared_ptr<Action> use (const Ptr& ptr)
+            virtual std::shared_ptr<Action> use (const Ptr& ptr, bool force=false)
                 const;
             ///< Generate action for using via inventory menu (default implementation: return a
             /// null action).
@@ -321,8 +324,8 @@ namespace MWWorld
             virtual bool canFly(const MWWorld::ConstPtr& ptr) const;
             virtual bool canSwim(const MWWorld::ConstPtr& ptr) const;
             virtual bool canWalk(const MWWorld::ConstPtr& ptr) const;
-            bool isPureWaterCreature(const MWWorld::Ptr& ptr) const;
-            bool isPureFlyingCreature(const MWWorld::Ptr& ptr) const;
+            bool isPureWaterCreature(const MWWorld::ConstPtr& ptr) const;
+            bool isPureFlyingCreature(const MWWorld::ConstPtr& ptr) const;
             bool isPureLandCreature(const MWWorld::Ptr& ptr) const;
             bool isMobile(const MWWorld::Ptr& ptr) const;
 

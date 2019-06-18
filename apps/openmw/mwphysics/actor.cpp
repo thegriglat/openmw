@@ -6,10 +6,11 @@
 
 #include <components/sceneutil/positionattitudetransform.hpp>
 #include <components/resource/bulletshape.hpp>
+#include <components/debug/debuglog.hpp>
+#include <components/misc/convert.hpp>
 
 #include "../mwworld/class.hpp"
 
-#include "convert.hpp"
 #include "collisiontype.hpp"
 
 namespace MWPhysics
@@ -28,6 +29,31 @@ Actor::Actor(const MWWorld::Ptr& ptr, osg::ref_ptr<const Resource::BulletShape> 
     mHalfExtents = shape->mCollisionBoxHalfExtents;
     mMeshTranslation = shape->mCollisionBoxTranslate;
 
+    // We can not create actor without collisions - he will fall through the ground.
+    // In this case we should autogenerate collision box based on mesh shape
+    // (NPCs have bodyparts and use a different approach)
+    if (!ptr.getClass().isNpc() && mHalfExtents.length2() == 0.f)
+    {
+        const Resource::BulletShape* collisionShape = shape.get();
+        if (collisionShape && collisionShape->mCollisionShape)
+        {
+            btTransform transform;
+            transform.setIdentity();
+            btVector3 min;
+            btVector3 max;
+
+            collisionShape->mCollisionShape->getAabb(transform, min, max);
+            mHalfExtents.x() = (max[0] - min[0])/2.f;
+            mHalfExtents.y() = (max[1] - min[1])/2.f;
+            mHalfExtents.z() = (max[2] - min[2])/2.f;
+
+            mMeshTranslation = osg::Vec3f(0.f, 0.f, mHalfExtents.z());
+        }
+
+        if (mHalfExtents.length2() == 0.f)
+            Log(Debug::Error) << "Error: Failed to calculate bounding box for actor \"" << ptr.getCellRef().getRefId() << "\".";
+    }
+
     // Use capsule shape only if base is square (nonuniform scaling apparently doesn't work on it)
     if (std::abs(mHalfExtents.x()-mHalfExtents.y())<mHalfExtents.x()*0.05 && mHalfExtents.z() >= mHalfExtents.x())
     {
@@ -36,7 +62,7 @@ Actor::Actor(const MWWorld::Ptr& ptr, osg::ref_ptr<const Resource::BulletShape> 
     }
     else
     {
-        mShape.reset(new btBoxShape(toBullet(mHalfExtents)));
+        mShape.reset(new btBoxShape(Misc::Convert::toBullet(mHalfExtents)));
         mRotationallyInvariant = false;
     }
 
@@ -112,13 +138,13 @@ void Actor::updateCollisionObjectPosition()
     btTransform tr = mCollisionObject->getWorldTransform();
     osg::Vec3f scaledTranslation = mRotation * osg::componentMultiply(mMeshTranslation, mScale);
     osg::Vec3f newPosition = scaledTranslation + mPosition;
-    tr.setOrigin(toBullet(newPosition));
+    tr.setOrigin(Misc::Convert::toBullet(newPosition));
     mCollisionObject->setWorldTransform(tr);
 }
 
 osg::Vec3f Actor::getCollisionObjectPosition() const
 {
-    return toOsg(mCollisionObject->getWorldTransform().getOrigin());
+    return Misc::Convert::toOsg(mCollisionObject->getWorldTransform().getOrigin());
 }
 
 void Actor::setPosition(const osg::Vec3f &position)
@@ -143,7 +169,7 @@ void Actor::updateRotation ()
 {
     btTransform tr = mCollisionObject->getWorldTransform();
     mRotation = mPtr.getRefData().getBaseNode()->getAttitude();
-    tr.setRotation(toBullet(mRotation));
+    tr.setRotation(Misc::Convert::toBullet(mRotation));
     mCollisionObject->setWorldTransform(tr);
 
     updateCollisionObjectPosition();
@@ -161,7 +187,7 @@ void Actor::updateScale()
 
     mPtr.getClass().adjustScale(mPtr, scaleVec, false);
     mScale = scaleVec;
-    mShape->setLocalScaling(toBullet(mScale));
+    mShape->setLocalScaling(Misc::Convert::toBullet(mScale));
 
     scaleVec = osg::Vec3f(scale,scale,scale);
     mPtr.getClass().adjustScale(mPtr, scaleVec, true);
@@ -173,6 +199,11 @@ void Actor::updateScale()
 osg::Vec3f Actor::getHalfExtents() const
 {
     return osg::componentMultiply(mHalfExtents, mScale);
+}
+
+osg::Vec3f Actor::getOriginalHalfExtents() const
+{
+    return mHalfExtents;
 }
 
 osg::Vec3f Actor::getRenderingHalfExtents() const

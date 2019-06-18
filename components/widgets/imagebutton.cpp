@@ -2,8 +2,12 @@
 
 #include <MyGUI_RenderManager.h>
 
+#include <components/debug/debuglog.hpp>
+
 namespace Gui
 {
+
+    bool ImageButton::sDefaultNeedKeyFocus = true;
 
     ImageButton::ImageButton()
         : Base()
@@ -11,7 +15,12 @@ namespace Gui
         , mMousePress(false)
         , mKeyFocus(false)
     {
-        setNeedKeyFocus(true);
+        setNeedKeyFocus(sDefaultNeedKeyFocus);
+    }
+
+    void ImageButton::setDefaultNeedKeyFocus(bool enabled)
+    {
+        sDefaultNeedKeyFocus = enabled;
     }
 
     void ImageButton::setPropertyOverride(const std::string &_key, const std::string &_value)
@@ -70,7 +79,7 @@ namespace Gui
         MyGUI::ITexture* texture = MyGUI::RenderManager::getInstance().getTexture(mImageNormal);
         if (!texture)
         {
-            std::cerr << "ImageButton: can't find " << mImageNormal << std::endl;
+            Log(Debug::Error) << "ImageButton: can't find image " << mImageNormal;
             return MyGUI::IntSize(0,0);
         }
         return MyGUI::IntSize (texture->getWidth(), texture->getHeight());

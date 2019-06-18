@@ -14,13 +14,13 @@ namespace Loading
         /// @note "non-important" labels may not show on screen if the loading process went so fast
         /// that the implementation decided not to show a loading screen at all. "important" labels
         /// will show in a separate message-box if the loading screen was not shown.
-        virtual void setLabel (const std::string& label, bool important=false) {}
+        virtual void setLabel (const std::string& label, bool important=false, bool center=false) {}
 
         /// Start a loading sequence. Must call loadingOff() when done.
         /// @note To get the loading screen to actually update, you must call setProgress / increaseProgress periodically.
         /// @note It is best to use the ScopedLoad object instead of using loadingOn()/loadingOff() directly,
         ///  so that the loading is exception safe.
-        virtual void loadingOn() {}
+        virtual void loadingOn(bool visible=true) {}
         virtual void loadingOff() {}
 
         /// Set the total range of progress (e.g. the number of objects to load).

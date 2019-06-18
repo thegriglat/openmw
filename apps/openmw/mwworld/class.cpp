@@ -20,7 +20,6 @@
 
 #include "../mwmechanics/creaturestats.hpp"
 #include "../mwmechanics/npcstats.hpp"
-#include "../mwmechanics/magiceffects.hpp"
 
 namespace MWWorld
 {
@@ -83,6 +82,18 @@ namespace MWWorld
             return ptr.getCellRef().getCharge();
     }
 
+    float Class::getItemNormalizedHealth (const ConstPtr& ptr) const
+    {
+        if (getItemMaxHealth(ptr) == 0)
+        {
+            return 0.f;
+        }
+        else
+        {
+            return getItemHealth(ptr) / static_cast<float>(getItemMaxHealth(ptr));
+        }
+    }
+
     int Class::getItemMaxHealth (const ConstPtr& ptr) const
     {
         throw std::runtime_error ("class does not have item health");
@@ -113,7 +124,7 @@ namespace MWWorld
         return std::shared_ptr<Action> (new NullAction);
     }
 
-    std::shared_ptr<Action> Class::use (const Ptr& ptr) const
+    std::shared_ptr<Action> Class::use (const Ptr& ptr, bool force) const
     {
         return std::shared_ptr<Action> (new NullAction);
     }
@@ -396,7 +407,7 @@ namespace MWWorld
         return false;
     }
 
-    bool Class::isPureWaterCreature(const MWWorld::Ptr& ptr) const
+    bool Class::isPureWaterCreature(const ConstPtr& ptr) const
     {
         return canSwim(ptr)
                 && !isBipedal(ptr)
@@ -404,7 +415,7 @@ namespace MWWorld
                 && !canWalk(ptr);
     }
 
-    bool Class::isPureFlyingCreature(const Ptr& ptr) const
+    bool Class::isPureFlyingCreature(const ConstPtr& ptr) const
     {
         return canFly(ptr)
                 && !isBipedal(ptr)
@@ -462,10 +473,15 @@ namespace MWWorld
     float Class::getNormalizedEncumbrance(const Ptr &ptr) const
     {
         float capacity = getCapacity(ptr);
+        float encumbrance = getEncumbrance(ptr);
+
+        if (encumbrance == 0)
+            return 0.f;
+
         if (capacity == 0)
             return 1.f;
 
-        return getEncumbrance(ptr) / capacity;
+        return encumbrance / capacity;
     }
 
     std::string Class::getSound(const MWWorld::ConstPtr&) const

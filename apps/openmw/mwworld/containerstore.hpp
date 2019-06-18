@@ -68,6 +68,9 @@ namespace MWWorld
 
             static const std::string sGoldId;
 
+        protected:
+            ContainerStoreListener* mListener;
+
         private:
 
             MWWorld::CellRefList<ESM::Potion>            potions;
@@ -86,8 +89,6 @@ namespace MWWorld
             std::map<std::pair<std::string, std::string>, int> mLevelledItemMap;
             ///< Stores result of levelled item spawns. <(refId, spawningGroup), count>
             /// This is used to restock levelled items(s) if the old item was sold.
-
-            ContainerStoreListener* mListener;
 
             mutable float mCachedWeight;
             mutable bool mWeightUpToDate;
@@ -126,6 +127,8 @@ namespace MWWorld
             
             ContainerStoreIterator begin (int mask = Type_All);
             ContainerStoreIterator end();
+
+            bool hasVisibleItems() const;
 
             virtual ContainerStoreIterator add (const Ptr& itemPtr, int count, const Ptr& actorPtr, bool setOwner=false);
             ///< Add the item pointed to by \a ptr to this container. (Stacks automatically if needed)
@@ -197,6 +200,9 @@ namespace MWWorld
             static int getType (const ConstPtr& ptr);
             ///< This function throws an exception, if ptr does not point to an object, that can be
             /// put into a container.
+
+            Ptr findReplacement(const std::string& id);
+            ///< Returns replacement for object with given id. Prefer used items (with low durability left).
 
             Ptr search (const std::string& id);
 

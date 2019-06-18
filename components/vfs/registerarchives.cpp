@@ -1,7 +1,9 @@
 #include "registerarchives.hpp"
 
-#include <iostream>
+#include <set>
 #include <sstream>
+
+#include <components/debug/debuglog.hpp>
 
 #include <components/vfs/manager.hpp>
 #include <components/vfs/bsaarchive.hpp>
@@ -20,7 +22,7 @@ namespace VFS
             {
                 // Last BSA has the highest priority
                 const std::string archivePath = collections.getPath(*archive).string();
-                std::cout << "Adding BSA archive " << archivePath << std::endl;
+                Log(Debug::Info) << "Adding BSA archive " << archivePath;
 
                 vfs->addArchive(new BsaArchive(archivePath));
             }
@@ -33,12 +35,20 @@ namespace VFS
         }
 
         if (useLooseFiles)
+        {
+            std::set<boost::filesystem::path> seen;
             for (Files::PathContainer::const_iterator iter = dataDirs.begin(); iter != dataDirs.end(); ++iter)
             {
-                std::cout << "Adding data directory " << iter->string() << std::endl;
-                // Last data dir has the highest priority
-                vfs->addArchive(new FileSystemArchive(iter->string()));
+                if (seen.insert(*iter).second)
+                {
+                    Log(Debug::Info) << "Adding data directory " << iter->string();
+                    // Last data dir has the highest priority
+                    vfs->addArchive(new FileSystemArchive(iter->string()));
+                }
+                else
+                    Log(Debug::Info) << "Ignoring duplicate data directory " << iter->string();
             }
+        }
 
         vfs->buildIndex();
     }

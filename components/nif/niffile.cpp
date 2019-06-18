@@ -73,6 +73,7 @@ static std::map<std::string,RecordFactoryEntry> makeFactory()
     newFactory.insert(makeEntry("NiGeomMorpherController",    &construct <NiGeomMorpherController>     , RC_NiGeomMorpherController       ));
     newFactory.insert(makeEntry("NiKeyframeController",       &construct <NiKeyframeController>        , RC_NiKeyframeController          ));
     newFactory.insert(makeEntry("NiAlphaController",          &construct <NiAlphaController>           , RC_NiAlphaController             ));
+    newFactory.insert(makeEntry("NiRollController",           &construct <NiRollController>            , RC_NiRollController              ));
     newFactory.insert(makeEntry("NiUVController",             &construct <NiUVController>              , RC_NiUVController                ));
     newFactory.insert(makeEntry("NiPathController",           &construct <NiPathController>            , RC_NiPathController              ));
     newFactory.insert(makeEntry("NiMaterialColorController",  &construct <NiMaterialColorController>   , RC_NiMaterialColorController     ));
@@ -108,6 +109,7 @@ static std::map<std::string,RecordFactoryEntry> makeFactory()
     newFactory.insert(makeEntry("NiSequenceStreamHelper",     &construct <NiSequenceStreamHelper>      , RC_NiSequenceStreamHelper        ));
     newFactory.insert(makeEntry("NiSourceTexture",            &construct <NiSourceTexture>             , RC_NiSourceTexture               ));
     newFactory.insert(makeEntry("NiSkinInstance",             &construct <NiSkinInstance>              , RC_NiSkinInstance                ));
+    newFactory.insert(makeEntry("NiLookAtController",         &construct <NiLookAtController>          , RC_NiLookAtController            ));
     return newFactory;
 }
 
@@ -117,19 +119,13 @@ static const std::map<std::string,RecordFactoryEntry> factories = makeFactory();
 
 std::string NIFFile::printVersion(unsigned int version)
 {
-    union ver_quad
-    {
-        uint32_t full;
-        uint8_t quad[4];
-    } version_out;
-
-    version_out.full = version;
+    int major = (version >> 24) & 0xFF;
+    int minor = (version >> 16) & 0xFF;
+    int patch = (version >> 8) & 0xFF;
+    int rev = version & 0xFF;
 
     std::stringstream stream;
-    stream  << version_out.quad[3] << "."
-            << version_out.quad[2] << "."
-            << version_out.quad[1] << "."
-            << version_out.quad[0];
+    stream << major << "." << minor << "." << patch << "." << rev;
     return stream.str();
 }
 
@@ -144,7 +140,9 @@ void NIFFile::parse(Files::IStreamPtr stream)
 
     // Get BCD version
     ver = nif.getUInt();
-    if(ver != VER_MW)
+    // 4.0.0.0 is an older, practically identical version of the format.
+    // It's not used by Morrowind assets but Morrowind supports it.
+    if(ver != 0x04000000 && ver != VER_MW)
         fail("Unsupported NIF version: " + printVersion(ver));
     // Number of records
     size_t recNum = nif.getInt();
@@ -161,7 +159,7 @@ void NIFFile::parse(Files::IStreamPtr stream)
 
     for(size_t i = 0;i < recNum;i++)
     {
-        Record *r = NULL;
+        Record *r = nullptr;
 
         std::string rec = nif.getString();
         if(rec.empty())
@@ -181,7 +179,7 @@ void NIFFile::parse(Files::IStreamPtr stream)
         else
             fail("Unknown record type " + rec);
 
-        assert(r != NULL);
+        assert(r != nullptr);
         assert(r->recType != RC_MISSING);
         r->recName = rec;
         r->recIndex = i;
@@ -202,7 +200,7 @@ void NIFFile::parse(Files::IStreamPtr stream)
         }
         else
         {
-            roots[i] = NULL;
+            roots[i] = nullptr;
             warn("Null Root found");
         }
     }

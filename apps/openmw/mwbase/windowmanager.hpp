@@ -146,7 +146,7 @@ namespace MWBase
             virtual MWGui::TradeWindow* getTradeWindow() = 0;
 
             /// Make the player use an item, while updating GUI state accordingly
-            virtual void useItem(const MWWorld::Ptr& item) = 0;
+            virtual void useItem(const MWWorld::Ptr& item, bool force=false) = 0;
 
             virtual void updateSpellWindow() = 0;
 
@@ -219,6 +219,7 @@ namespace MWBase
             virtual const MWWorld::Ptr& getSelectedEnchantItem() const = 0;
             virtual void setSelectedWeapon(const MWWorld::Ptr& item) = 0;
             virtual const MWWorld::Ptr& getSelectedWeapon() const = 0;
+            virtual int getFontHeight() const = 0;
             virtual void unsetSelectedSpell() = 0;
             virtual void unsetSelectedWeapon() = 0;
 
@@ -284,10 +285,14 @@ namespace MWBase
 
             virtual void setEnemy (const MWWorld::Ptr& enemy) = 0;
 
+            virtual int getMessagesCount() const = 0;
+
             virtual const Translation::Storage& getTranslationDataStorage() const = 0;
 
             /// Warning: do not use MyGUI::InputManager::setKeyFocusWidget directly. Instead use this.
             virtual void setKeyFocusWidget (MyGUI::Widget* widget) = 0;
+
+            virtual void loadUserFonts() = 0;
 
             virtual Loading::Listener* getLoadingScreen() = 0;
 
@@ -317,6 +322,7 @@ namespace MWBase
             virtual void removeCurrentModal(MWGui::WindowModal* input) = 0;
 
             virtual void pinWindow (MWGui::GuiWindow window) = 0;
+            virtual void toggleMaximized(MWGui::Layout *layout) = 0;
 
             /// Fade the screen in, over \a time seconds
             virtual void fadeScreenIn(const float time, bool clearQueue=true, float delay=0.f) = 0;
@@ -330,6 +336,7 @@ namespace MWBase
             virtual void activateHitOverlay(bool interrupt=true) = 0;
             virtual void setWerewolfOverlay(bool set) = 0;
 
+            virtual void toggleConsole() = 0;
             virtual void toggleDebugWindow() = 0;
 
             /// Cycle to next or previous spell
@@ -345,12 +352,14 @@ namespace MWBase
             virtual std::string correctTexturePath(const std::string& path) = 0;
             virtual bool textureExists(const std::string& path) = 0;
 
+            virtual void addCell(MWWorld::CellStore* cell) = 0;
             virtual void removeCell(MWWorld::CellStore* cell) = 0;
             virtual void writeFog(MWWorld::CellStore* cell) = 0;
 
             virtual const MWGui::TextColours& getTextColours() = 0;
 
-            virtual bool injectKeyPress(MyGUI::KeyCode key, unsigned int text) = 0;
+            virtual bool injectKeyPress(MyGUI::KeyCode key, unsigned int text, bool repeat) = 0;
+            virtual bool injectKeyRelease(MyGUI::KeyCode key) = 0;
     };
 }
 

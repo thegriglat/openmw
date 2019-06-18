@@ -166,7 +166,7 @@ namespace MWWorld
          */
         bool isDynamic(const std::string &id) const;
 
-        /** Returns a random record that starts with the named ID, or NULL if not found. */
+        /** Returns a random record that starts with the named ID, or nullptr if not found. */
         const T *searchRandom(const std::string &id) const;
 
         const T *find(const std::string &id) const;
@@ -247,6 +247,8 @@ namespace MWWorld
 
         RecordId load(ESM::ESMReader &esm);
         void setUp();
+    private:
+        bool mBuilt = false;
     };
 
     template <>
@@ -293,6 +295,7 @@ namespace MWWorld
         const ESM::Cell *find(const std::string &id) const;
         const ESM::Cell *find(int x, int y) const;
 
+        virtual void clearDynamic();
         void setUp();
 
         RecordId load(ESM::ESMReader &esm);

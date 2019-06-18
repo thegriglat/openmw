@@ -1,6 +1,6 @@
 #include "summoning.hpp"
 
-#include <iostream>
+#include <components/debug/debuglog.hpp>
 
 #include "../mwbase/environment.hpp"
 #include "../mwbase/world.hpp"
@@ -59,7 +59,7 @@ namespace MWMechanics
                         MWMechanics::CreatureStats& summonedCreatureStats = ref.getPtr().getClass().getCreatureStats(ref.getPtr());
 
                         // Make the summoned creature follow its master and help in fights
-                        AiFollow package(mActor.getCellRef().getRefId());
+                        AiFollow package(mActor);
                         summonedCreatureStats.getAiSequence().stack(package, ref.getPtr());
                         creatureActorId = summonedCreatureStats.getActorId();
 
@@ -76,7 +76,7 @@ namespace MWMechanics
                     }
                     catch (std::exception& e)
                     {
-                        std::cerr << "Failed to spawn summoned creature: " << e.what() << std::endl;
+                        Log(Debug::Error) << "Failed to spawn summoned creature: " << e.what();
                         // still insert into creatureMap so we don't try to spawn again every frame, that would spam the warning log
                     }
 

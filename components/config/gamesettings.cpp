@@ -338,6 +338,9 @@ bool Config::GameSettings::writeFileWithComments(QFile &file)
             if (!comments.empty() && index != -1 && settingRegex.captureCount() >= 2 &&
                 mUserSettings.find(settingRegex.cap(1)) != mUserSettings.end())
             {
+                if (commentStart == fileCopy.end())
+                    throw std::runtime_error("Config::GameSettings: failed to parse settings - iterator is past of end of settings file");
+
                 for (std::vector<QString>::const_iterator it = comments.begin(); it != comments.end(); ++it)
                 {
                     *commentStart = *it;
@@ -493,8 +496,10 @@ bool Config::GameSettings::hasMaster()
 {
     bool result = false;
     QStringList content = mSettings.values(QString(Config::GameSettings::sContentKey));
-    for (int i = 0; i < content.count(); ++i) {
-        if (content.at(i).contains(".omwgame") || content.at(i).contains(".esm")) {
+    for (int i = 0; i < content.count(); ++i) 
+    {
+        if (content.at(i).endsWith(QLatin1String(".omwgame"), Qt::CaseInsensitive) || content.at(i).endsWith(QLatin1String(".esm"), Qt::CaseInsensitive)) 
+        {
             result = true;
             break;
         }

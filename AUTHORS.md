@@ -15,33 +15,43 @@ Programmers
     Adam Hogan (aurix)
     Aesylwinn
     aegis
+    AHSauge
     Aleksandar Jovanov
     Alex Haddad (rainChu)
     Alex McKibben
     alexanderkjall
     Alexander Nadeau (wareya)
     Alexander Olofsson (Ace)
+    Alex S (docwest)
     Allofich
     Andrei Kortunov (akortunov)
     AnyOldName3
-    Aussiemon
-    Austin Salgat (Salgat)
+    Ardekantur
+    Armin Preiml
     Artem Kotsynyak (greye)
     artemutin
     Arthur Moore (EmperorArthur)
     Assumeru
     athile
+    Aussiemon
+    Austin Salgat (Salgat)
     Ben Shealy (bentsherman)
+    Berulacks
     Bret Curtis (psi29a)
     Britt Mathis (galdor557)
     Capostrophic
+    Carl Maxwell
     cc9cii
+    Cédric Mocquillon
     Chris Boyce (slothlife)
     Chris Robinson (KittyCat)
     Cory F. Cohen (cfcohen)
     Cris Mihalache (Mirceam)
     crussell187
+    DanielVukelich
     darkf
+    David Cernat (davidcernat)
+    Declan Millar (declan-millar)
     devnexen
     Dieho
     Dmitry Shkurskiy (endorph)
@@ -49,24 +59,33 @@ Programmers
     Douglas Mencken (dougmencken)
     dreamer-dead
     David Teviotdale (dteviot)
+    Diggory Hardy
+    Dmitry Marakasov (AMDmi3)
     Edmondo Tommasina (edmondo)
     Eduard Cot (trombonecot)
     Eli2
-    elsid
     Emanuel Guével (potatoesmaster)
     eroen
     escondida
     Evgeniy Mineev (sandstranger)
     Federico Guerra (FedeWar)
     Fil Krynicki (filkry)
+    Finbar Crago (finbar-crago)
+    Florian Weber (Florianjw)
     Gašper Sedej
+    Gijsbert ter Horst (Ghostbird)
+    Gohan1989
     gugus/gus
-    Hallfaer Tuilinn
+    guidoj
     Haoda Wang (h313)
     hristoast
     Internecine
-    Jacob Essex (Yacoby)    
+    Jackerty
+    Jacob Essex (Yacoby)
     Jake Westrip (16bitint)
+    James Carty (MrTopCat)
+    Jan-Peter Nilsson (peppe)
+    Jan Borsodi (am0s)
     Jason Hooks (jhooks)
     jeaye
     Jeffrey Haines (Jyby)
@@ -77,6 +96,7 @@ Programmers
     John Blomberg (fstp)
     Jordan Ayers
     Jordan Milne
+    Josua Grawitter
     Jules Blok (Armada651)
     julianko
     Julien Voisin (jvoisin/ap0)
@@ -88,9 +108,10 @@ Programmers
     lazydev
     Leon Krieg (lkrieg)
     Leon Saunders (emoose)
-    Łukasz Gołębiewski (lukago)
     logzero
     lohikaarme
+    Lordrea
+    Łukasz Gołębiewski (lukago)
     Lukasz Gromanowski (lgro)
     Manuel Edelmann (vorenon)
     Marc Bouvier (CramitDeFrog)
@@ -105,6 +126,8 @@ Programmers
     Michael Hogan (Xethik)
     Michael Mc Donnell
     Michael Papageorgiou (werdanith)
+    Michael Stopa (Stomy)
+    Michał Ściubidło (mike-sc)
     Michał Bień (Glorf)
     Michał Moroz (dragonee)
     Miloslav Číž (drummyfish)
@@ -113,18 +136,24 @@ Programmers
     Mitchell Schwitzer (schwitzerm)
     naclander
     Narmo
+    Nat Meo (Utopium)
     Nathan Jeffords (blunted2night)
     NeveHanter
     Nialsy
+    Nicolay Korslund
     Nikolay Kasyanov (corristo)
     nobrakal
     Nolan Poe (nopoe)
     Oleg Chkan (mrcheko)
     Paul Cercueil (pcercuei)
     Paul McElroy (Greendogo)
+    pchan3
+    Perry Hugh
+    Phillip Andrews (PhillipAnd)
     Pi03k
     Pieter van der Kloet (pvdk)
     pkubik
+    PLkolek
     PlutonicOverkill
     Radu-Marius Popovici (rpopovici)
     Rafael Moura (dhustkoder)
@@ -136,18 +165,24 @@ Programmers
     Rohit Nirmal
     Roman Melnik (Kromgart)
     Roman Proskuryakov (kpp)
+    Roman Siromakha (elsid)
     Sandy Carter (bwrsandman)
-    Scott Howard
+    Scott Howard (maqifrnswa)
     scrawl
     Sebastian Wick (swick)
-    Sergey Shambir
+    Sergey Fukanchik
+    Sergey Shambir (sergey-shambir)
+    sergoz
     ShadowRadiance
     Siimacore
     sir_herrbatka
     smbas
+    Sophie Kirschner (pineapplemachine)
     spycrab
     Stefan Galowicz (bogglez)
     Stanislav Bobrov (Jiub)
+    Stanislaw Halik (sthalik)
+    Star-Demon
     stil-t
     svaante
     Sylvain Thesnieres (Garvek)
@@ -155,21 +190,35 @@ Programmers
     terrorfisch
     thegriglat
     Thomas Luppi (Digmaster)
-    Will Herrmann (Thunderforge)
+    tlmullis
+    tri4ng1e
+    Thoronador
     Tom Mason (wheybags)
     Torben Leif Carrington (TorbenC)
+    unelsson
+    uramer
     viadanna
     Vincent Heuken
+    Vladimir Panteleev (CyberShadow)
+    Wang Ryu (bzzt)
+    Will Herrmann (Thunderforge)
     vocollapse
+    xyzz
+    Yohaulticetl
+    Yuri Krupenin
     zelurker
 
 Documentation
 -------------
 
+    Adam Bowen (adamnbowen)
     Alejandro Sanchez (HiPhish)
     Bodillium
     Bret Curtis (psi29a)
     Cramal
+    David Walley (Loriel)
+    Diego Crespo
+    Joakim Berg (lysol90)
     Ryan Tucker (Ravenwing)
     sir_herrbatka
 
@@ -190,13 +239,19 @@ Public Relations and Translations
 
     Artem Kotsynyak (greye) - Russian News Writer
     Dawid Lakomy (Vedyimyn) - Polish News Writer
+    ElderTroll - Release Manager
     Jim Clauwaert (Zedd) - Public Outreach
+    juanmnzsk8 - Spanish News Writer
     Julien Voisin (jvoisin/ap0) - French News Writer
+    Kingpix - Italian News Writer
     Lukasz Gromanowski (lgro) - English News Writer
     Martin Otto (Atahualpa) - Podcaster, Public Outreach, German Translator
     Mickey Lyle (raevol) - Release Manager
+    Nekochan - English News Writer
+    penguinroad - Indonesian News Writer
     Pithorn - Chinese News Writer
     sir_herrbatka - Polish News Writer
+    spyboot - German Translator
     Tom Koenderink (Okulo) - English News Writer
 
 Website
@@ -224,35 +279,7 @@ Artwork
 
     Necrod - OpenMW Logo
     Mickey Lyle (raevol) - Wordpress Theme
-    Tom Koenderink (Okulo), SirHerrbatka, crysthala, Shnatsel - OpenMW Editor Icons
-
-Inactive Contributors
----------------------
-
-    Ardekantur
-    Armin Preiml
-    Berulacks
-    Carl Maxwell
-    Diggory Hardy
-    Dmitry Marakasov (AMDmi3)
-    ElderTroll
-    guidoj
-    Jan-Peter Nilsson (peppe)
-    Jan Borsodi
-    Josua Grawitter
-    juanmnzsk8
-    Kingpix
-    Lordrea
-    Michal Sciubidlo
-    Nicolay Korslund
-    Nekochan
-    pchan3
-    penguinroad
-    sergoz
-    spyboot
-    Star-Demon
-    Thoronador
-    Yuri Krupenin
+    Tom Koenderink (Okulo), SirHerrbatka, crysthala, Shnatsel, Lamoot - OpenMW Editor Icons
 
 Additional Credits
 ------------------

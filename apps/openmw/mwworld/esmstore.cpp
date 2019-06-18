@@ -1,12 +1,11 @@
 #include "esmstore.hpp"
 
 #include <set>
-#include <iostream>
 
 #include <boost/filesystem/operations.hpp>
 
+#include <components/debug/debuglog.hpp>
 #include <components/loadinglistener/loadinglistener.hpp>
-
 #include <components/esm/esmreader.hpp>
 #include <components/esm/esmwriter.hpp>
 
@@ -84,7 +83,7 @@ void ESMStore::load(ESM::ESMReader &esm, Loading::Listener* listener)
                 }
                 else
                 {
-                    std::cerr << "error: info record without dialog" << std::endl;
+                    Log(Debug::Error) << "Error: info record without dialog";
                     esm.skipRecord();
                 }
             } else if (n.intval == ESM::REC_MGEF) {
@@ -120,7 +119,7 @@ void ESMStore::load(ESM::ESMReader &esm, Loading::Listener* listener)
     }
 }
 
-void ESMStore::setUp()
+void ESMStore::setUp(bool validateRecords)
 {
     mIds.clear();
 
@@ -141,6 +140,124 @@ void ESMStore::setUp()
     mMagicEffects.setUp();
     mAttributes.setUp();
     mDialogs.setUp();
+
+    if (validateRecords)
+        validate();
+}
+
+void ESMStore::validate()
+{
+    // Cache first class from store - we will use it if current class is not found
+    std::string defaultCls = "";
+    Store<ESM::Class>::iterator it = mClasses.begin();
+    if (it != mClasses.end())
+        defaultCls = it->mId;
+    else
+        throw std::runtime_error("List of NPC classes is empty!");
+
+    // Validate NPCs for non-existing class and faction.
+    // We will replace invalid entries by fixed ones
+    std::vector<ESM::NPC> npcsToReplace;
+    for (ESM::NPC npc : mNpcs)
+    {
+        bool changed = false;
+
+        const std::string npcFaction = npc.mFaction;
+        if (!npcFaction.empty())
+        {
+            const ESM::Faction *fact = mFactions.search(npcFaction);
+            if (!fact)
+            {
+                Log(Debug::Verbose) << "NPC '" << npc.mId << "' (" << npc.mName << ") has nonexistent faction '" << npc.mFaction << "', ignoring it.";
+                npc.mFaction = "";
+                npc.mNpdt.mRank = -1;
+                changed = true;
+            }
+        }
+
+        std::string npcClass = npc.mClass;
+        if (!npcClass.empty())
+        {
+            const ESM::Class *cls = mClasses.search(npcClass);
+            if (!cls)
+            {
+                Log(Debug::Verbose) << "NPC '" << npc.mId << "' (" << npc.mName << ") has nonexistent class '" << npc.mClass << "', using '" << defaultCls << "' class as replacement.";
+                npc.mClass = defaultCls;
+                changed = true;
+            }
+        }
+
+        if (changed)
+            npcsToReplace.push_back(npc);
+    }
+
+    for (const ESM::NPC &npc : npcsToReplace)
+    {
+        mNpcs.eraseStatic(npc.mId);
+        mNpcs.insertStatic(npc);
+    }
+
+    // Validate spell effects for invalid arguments
+    std::vector<ESM::Spell> spellsToReplace;
+    for (ESM::Spell spell : mSpells)
+    {
+        if (spell.mEffects.mList.empty())
+            continue;
+
+        bool changed = false;
+        auto iter = spell.mEffects.mList.begin();
+        while (iter != spell.mEffects.mList.end())
+        {
+            const ESM::MagicEffect* mgef = mMagicEffects.search(iter->mEffectID);
+            if (!mgef)
+            {
+                Log(Debug::Verbose) << "Spell '" << spell.mId << "' has an an invalid effect (index " << iter->mEffectID << ") present, dropping it.";
+                iter = spell.mEffects.mList.erase(iter);
+                changed = true;
+                continue;
+            }
+
+            if (mgef->mData.mFlags & ESM::MagicEffect::TargetSkill)
+            {
+                if (iter->mAttribute != -1)
+                {
+                    iter->mAttribute = -1;
+                    Log(Debug::Verbose) << ESM::MagicEffect::effectIdToString(iter->mEffectID) <<
+                        " effect of spell '" << spell.mId << "'  has an attribute argument present, dropping it.";
+                    changed = true;
+                }
+            }
+            else if (mgef->mData.mFlags & ESM::MagicEffect::TargetAttribute)
+            {
+                if (iter->mSkill != -1)
+                {
+                    iter->mSkill = -1;
+                    Log(Debug::Verbose) << ESM::MagicEffect::effectIdToString(iter->mEffectID) <<
+                        " effect of spell '" << spell.mId << "' has a skill argument present, dropping it.";
+                    changed = true;
+                }
+            }
+            else if (iter->mSkill != -1 || iter->mAttribute != -1)
+            {
+                iter->mSkill = -1;
+                iter->mAttribute = -1;
+                Log(Debug::Verbose) << ESM::MagicEffect::effectIdToString(iter->mEffectID) <<
+                    " effect of spell '" << spell.mId << "' has argument(s) present, dropping them.";
+                changed = true;
+            }
+
+            ++iter;
+        }
+
+        if (changed)
+            spellsToReplace.emplace_back(spell);
+    }
+
+    for (const ESM::Spell &spell : spellsToReplace)
+    {
+        mSpells.eraseStatic(spell.mId);
+        mSpells.insertStatic(spell);
+    }
 }
 
     int ESMStore::countSavedGameRecords() const

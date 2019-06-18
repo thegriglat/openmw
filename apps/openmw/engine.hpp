@@ -7,7 +7,7 @@
 #include <components/settings/settings.hpp>
 
 #include <osgViewer/Viewer>
-
+#include <osgViewer/ViewerEventHandlers>
 
 #include "mwbase/environment.hpp"
 
@@ -82,6 +82,7 @@ namespace OMW
             boost::filesystem::path mResDir;
             osg::ref_ptr<osgViewer::Viewer> mViewer;
             osg::ref_ptr<osgViewer::ScreenCaptureHandler> mScreenCaptureHandler;
+            osgViewer::ScreenCaptureHandler::CaptureOperation *mScreenCaptureOperation;
             std::string mCellName;
             std::vector<std::string> mContentFiles;
             bool mSkipMenu;
@@ -90,7 +91,6 @@ namespace OMW
             bool mCompileAllDialogue;
             int mWarningsMode;
             std::string mFocusName;
-            std::map<std::string,std::string> mFallbackMap;
             bool mScriptConsoleMode;
             std::string mStartupScript;
             int mActivationDistanceOverride;
@@ -99,6 +99,7 @@ namespace OMW
             bool mGrab;
 
             bool mExportFonts;
+            unsigned int mRandomSeed;
 
             Compiler::Extensions mExtensions;
             Compiler::Context *mScriptContext;
@@ -180,8 +181,6 @@ namespace OMW
             /// Font encoding
             void setEncoding(const ToUTF8::FromType& encoding);
 
-            void setFallbackValues(std::map<std::string,std::string> map);
-
             /// Enable console-only script functionality
             void setScriptConsoleMode (bool enabled);
 
@@ -201,6 +200,8 @@ namespace OMW
 
             /// Set the save game file to load after initialising the engine.
             void setSaveGameFile(const std::string& savegame);
+
+            void setRandomSeed(unsigned int seed);
 
         private:
             Files::ConfigurationManager& mCfgMgr;

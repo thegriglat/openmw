@@ -6,14 +6,12 @@
 #include <osg/PositionAttitudeTransform>
 #include <osg/Group>
 
-#include <components/esm/loadstat.hpp>
 #include <components/esm/loadpgrd.hpp>
 #include <components/sceneutil/pathgridutil.hpp>
 
 #include "../mwbase/world.hpp" // these includes can be removed once the static-hack is gone
 #include "../mwbase/environment.hpp"
 
-#include "../mwworld/ptr.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/esmstore.hpp"
 #include "../mwmechanics/pathfinding.hpp"
@@ -27,8 +25,8 @@ namespace MWRender
 Pathgrid::Pathgrid(osg::ref_ptr<osg::Group> root)
     : mPathgridEnabled(false)
     , mRootNode(root)
-    , mPathGridRoot(NULL)
-    , mInteriorPathgridNode(NULL)
+    , mPathGridRoot(nullptr)
+    , mInteriorPathgridNode(nullptr)
 {
 }
 
@@ -78,23 +76,23 @@ void Pathgrid::togglePathgrid()
         mPathGridRoot->setNodeMask(Mask_Debug);
         mRootNode->addChild(mPathGridRoot);
 
-        for(CellList::iterator it = mActiveCells.begin(); it != mActiveCells.end(); ++it)
+        for(const MWWorld::CellStore* cell : mActiveCells)
         {
-            enableCellPathgrid(*it);
+            enableCellPathgrid(cell);
         }
     }
     else
     {
         // remove path grid meshes from already loaded cells
-        for(CellList::iterator it = mActiveCells.begin(); it != mActiveCells.end(); ++it)
+        for(const MWWorld::CellStore* cell : mActiveCells)
         {
-            disableCellPathgrid(*it);
+            disableCellPathgrid(cell);
         }
 
         if (mPathGridRoot)
         {
             mRootNode->removeChild(mPathGridRoot);
-            mPathGridRoot = NULL;
+            mPathGridRoot = nullptr;
         }
     }
 }
@@ -124,7 +122,7 @@ void Pathgrid::enableCellPathgrid(const MWWorld::CellStore *store)
     }
     else
     {
-        assert(mInteriorPathgridNode == NULL);
+        assert(mInteriorPathgridNode == nullptr);
         mInteriorPathgridNode = cellPathGrid;
     }
 }
@@ -146,7 +144,7 @@ void Pathgrid::disableCellPathgrid(const MWWorld::CellStore *store)
         if (mInteriorPathgridNode)
         {
             mPathGridRoot->removeChild(mInteriorPathgridNode);
-            mInteriorPathgridNode = NULL;
+            mInteriorPathgridNode = nullptr;
         }
     }
 }

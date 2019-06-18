@@ -3,9 +3,8 @@
 #include <osg/Transform>
 #include <osg/MatrixTransform>
 
+#include <components/debug/debuglog.hpp>
 #include <components/misc/stringops.hpp>
-
-#include <iostream>
 
 namespace SceneUtil
 {
@@ -36,8 +35,9 @@ private:
 Skeleton::Skeleton()
     : mBoneCacheInit(false)
     , mNeedToUpdateBoneMatrices(true)
-    , mActive(true)
+    , mActive(Active)
     , mLastFrameNumber(0)
+    , mLastCullFrameNumber(0)
 {
 
 }
@@ -48,6 +48,7 @@ Skeleton::Skeleton(const Skeleton &copy, const osg::CopyOp &copyop)
     , mNeedToUpdateBoneMatrices(true)
     , mActive(copy.mActive)
     , mLastFrameNumber(0)
+    , mLastCullFrameNumber(0)
 {
 
 }
@@ -63,7 +64,7 @@ Bone* Skeleton::getBone(const std::string &name)
 
     BoneCache::iterator found = mBoneCache.find(Misc::StringUtils::lowerCase(name));
     if (found == mBoneCache.end())
-        return NULL;
+        return nullptr;
 
     // find or insert in the bone hierarchy
 
@@ -80,7 +81,7 @@ Bone* Skeleton::getBone(const std::string &name)
         if (!matrixTransform)
             continue;
 
-        Bone* child = NULL;
+        Bone* child = nullptr;
         for (unsigned int i=0; i<bone->mChildren.size(); ++i)
         {
             if (bone->mChildren[i]->mNode == *it)
@@ -116,21 +117,21 @@ void Skeleton::updateBoneMatrices(unsigned int traversalNumber)
         if (mRootBone.get())
         {
             for (unsigned int i=0; i<mRootBone->mChildren.size(); ++i)
-                mRootBone->mChildren[i]->update(NULL);
+                mRootBone->mChildren[i]->update(nullptr);
         }
 
         mNeedToUpdateBoneMatrices = false;
     }
 }
 
-void Skeleton::setActive(bool active)
+void Skeleton::setActive(ActiveType active)
 {
     mActive = active;
 }
 
 bool Skeleton::getActive() const
 {
-    return mActive;
+    return mActive != Inactive;
 }
 
 void Skeleton::markDirty()
@@ -142,8 +143,16 @@ void Skeleton::markDirty()
 
 void Skeleton::traverse(osg::NodeVisitor& nv)
 {
-    if (!getActive() && nv.getVisitorType() == osg::NodeVisitor::UPDATE_VISITOR && mLastFrameNumber != 0)
-        return;
+    if (nv.getVisitorType() == osg::NodeVisitor::UPDATE_VISITOR)
+    {
+        if (mActive == Inactive && mLastFrameNumber != 0)
+            return;
+        if (mActive == SemiActive && mLastFrameNumber != 0 && mLastCullFrameNumber+3 <= nv.getTraversalNumber())
+            return;
+    }
+    else if (nv.getVisitorType() == osg::NodeVisitor::CULL_VISITOR)
+        mLastCullFrameNumber = nv.getTraversalNumber();
+
     osg::Group::traverse(nv);
 }
 
@@ -158,7 +167,7 @@ void Skeleton::childRemoved(unsigned int, unsigned int)
 }
 
 Bone::Bone()
-    : mNode(NULL)
+    : mNode(nullptr)
 {
 }
 
@@ -173,7 +182,7 @@ void Bone::update(const osg::Matrixf* parentMatrixInSkeletonSpace)
 {
     if (!mNode)
     {
-        std::cerr << "Error: Bone without node " << std::endl;
+        Log(Debug::Error) << "Error: Bone without node";
         return;
     }
     if (parentMatrixInSkeletonSpace)

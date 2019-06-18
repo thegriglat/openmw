@@ -198,7 +198,8 @@ CSMWorld::ModifyCommand::ModifyCommand (QAbstractItemModel& model, const QModelI
 
     if (mIndex.parent().isValid())
     {
-        setText ("Modify " + dynamic_cast<CSMWorld::IdTree*>(mModel)->nestedHeaderData (
+        CSMWorld::IdTree* tree = &dynamic_cast<CSMWorld::IdTree&>(*mModel);
+        setText ("Modify " + tree->nestedHeaderData (
                     mIndex.parent().column(), mIndex.column(), Qt::Horizontal, Qt::DisplayRole).toString());
     }
     else
@@ -243,12 +244,7 @@ void CSMWorld::CreateCommand::applyModifications()
 {
     if (!mNestedValues.empty())
     {
-        CSMWorld::IdTree *tree = dynamic_cast<CSMWorld::IdTree *>(&mModel);
-        if (tree == NULL)
-        {
-            throw std::logic_error("CSMWorld::CreateCommand: Attempt to add nested values to the non-nested model");
-        }
-
+        CSMWorld::IdTree* tree = &dynamic_cast<CSMWorld::IdTree&>(mModel);
         std::map<int, std::pair<int, QVariant> >::const_iterator current = mNestedValues.begin();
         std::map<int, std::pair<int, QVariant> >::const_iterator end = mNestedValues.end();
         for (; current != end; ++current)
@@ -445,16 +441,14 @@ void CSMWorld::UpdateCellCommand::redo()
         int cellColumn = mModel.searchColumnIndex (Columns::ColumnId_Cell);
         mIndex = mModel.index (mRow, cellColumn);
 
-        const int cellSize = 8192;
-
         QModelIndex xIndex = mModel.index (
             mRow, mModel.findColumnIndex (Columns::ColumnId_PositionXPos));
 
         QModelIndex yIndex = mModel.index (
             mRow, mModel.findColumnIndex (Columns::ColumnId_PositionYPos));
 
-        int x = std::floor (mModel.data (xIndex).toFloat() / cellSize);
-        int y = std::floor (mModel.data (yIndex).toFloat() / cellSize);
+        int x = std::floor (mModel.data (xIndex).toFloat() / Constants::CellSizeInUnits);
+        int y = std::floor (mModel.data (yIndex).toFloat() / Constants::CellSizeInUnits);
 
         std::ostringstream stream;
 

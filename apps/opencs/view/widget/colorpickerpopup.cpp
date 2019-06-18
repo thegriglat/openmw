@@ -4,7 +4,6 @@
 #include <QPushButton>
 #include <QEvent>
 #include <QKeyEvent>
-#include <QMouseEvent>
 #include <QLayout>
 #include <QStyleOption>
 
@@ -19,7 +18,6 @@ CSVWidget::ColorPickerPopup::ColorPickerPopup(QWidget *parent)
     mColorPicker->setWindowFlags(Qt::Widget);
     mColorPicker->setOptions(QColorDialog::NoButtons | QColorDialog::DontUseNativeDialog);
     mColorPicker->installEventFilter(this);
-    mColorPicker->open();
     connect(mColorPicker,
             SIGNAL(currentColorChanged(const QColor &)),
             this,
@@ -39,14 +37,16 @@ void CSVWidget::ColorPickerPopup::showPicker(const QPoint &position, const QColo
     geometry.moveTo(position);
     setGeometry(geometry);
 
-    mColorPicker->setCurrentColor(initialColor);
-    show();
+    // Calling getColor() creates a blocking dialog that will continue execution once the user chooses OK or Cancel
+    QColor color = mColorPicker->getColor(initialColor);
+    if (color.isValid())
+        mColorPicker->setCurrentColor(color);
 }
 
 void CSVWidget::ColorPickerPopup::mousePressEvent(QMouseEvent *event)
 {
     QPushButton *button = qobject_cast<QPushButton *>(parentWidget());
-    if (button != NULL)
+    if (button != nullptr)
     {
         QStyleOptionButton option;
         option.init(button);
@@ -61,12 +61,6 @@ void CSVWidget::ColorPickerPopup::mousePressEvent(QMouseEvent *event)
         }
     }
     QFrame::mousePressEvent(event);
-}
-
-void CSVWidget::ColorPickerPopup::hideEvent(QHideEvent *event)
-{
-    QFrame::hideEvent(event);
-    emit hid();
 }
 
 bool CSVWidget::ColorPickerPopup::eventFilter(QObject *object, QEvent *event)

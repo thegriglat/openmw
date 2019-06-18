@@ -1,7 +1,5 @@
 #include "spells.hpp"
 
-#include <cstdlib>
-
 #include <components/esm/loadspel.hpp>
 #include <components/esm/spellstate.hpp>
 #include <components/misc/rng.hpp>
@@ -96,7 +94,10 @@ namespace MWMechanics
                 for (unsigned int i=0; i<spell->mEffects.mList.size();++i)
                 {
                     if (spell->mEffects.mList[i].mMagnMin != spell->mEffects.mList[i].mMagnMax)
-                        random[i] = Misc::Rng::rollClosedProbability();
+                    {
+                        int delta = spell->mEffects.mList[i].mMagnMax - spell->mEffects.mList[i].mMagnMin;
+                        random[i] = Misc::Rng::rollDice(delta + 1) / static_cast<float>(delta);
+                    }
                 }
             }
 
@@ -184,14 +185,16 @@ namespace MWMechanics
 
     bool Spells::isSpellActive(const std::string &id) const
     {
-        TContainer::const_iterator found = mSpells.find(getSpell(id));
-        if (found != mSpells.end())
-        {
-            const ESM::Spell *spell = found->first;
+        if (id.empty())
+            return false;
 
-            return (spell->mData.mType==ESM::Spell::ST_Ability || spell->mData.mType==ESM::Spell::ST_Blight ||
-                spell->mData.mType==ESM::Spell::ST_Disease || spell->mData.mType==ESM::Spell::ST_Curse);
+        const ESM::Spell* spell = MWBase::Environment::get().getWorld()->getStore().get<ESM::Spell>().search(id);
+        if (spell && hasSpell(spell))
+        {
+            auto type = spell->mData.mType;
+            return (type==ESM::Spell::ST_Ability || type==ESM::Spell::ST_Blight || type==ESM::Spell::ST_Disease || type==ESM::Spell::ST_Curse);
         }
+
         return false;
     }
 
@@ -276,6 +279,25 @@ namespace MWMechanics
             }
             else
                 ++iter;
+        }
+    }
+
+    void Spells::removeEffects(const std::string &id)
+    {
+        if (isSpellActive(id))
+        {
+            for (TContainer::iterator spell = mSpells.begin(); spell != mSpells.end(); ++spell)
+            {
+                if (spell->first == getSpell(id))
+                {
+                    for (long unsigned int i = 0; i != spell->first->mEffects.mList.size(); i++)
+                    {
+                        spell->second.mPurgedEffects.insert(i);
+                    }
+                }
+            }
+
+            mSpellsChanged = true;
         }
     }
 

@@ -136,7 +136,7 @@ namespace CSMWorld
     struct VarTypeColumn : public Column<ESXRecordT>
     {
         VarTypeColumn (ColumnBase::Display display)
-        : Column<ESXRecordT> (Columns::ColumnId_ValueType, display)
+            : Column<ESXRecordT> (Columns::ColumnId_ValueType, display, ColumnBase::Flag_Table | ColumnBase::Flag_Dialogue | ColumnBase::Flag_Dialogue_Refresh)
         {}
 
         virtual QVariant get (const Record<ESXRecordT>& record) const
@@ -161,7 +161,7 @@ namespace CSMWorld
     template<typename ESXRecordT>
     struct VarValueColumn : public Column<ESXRecordT>
     {
-        VarValueColumn() : Column<ESXRecordT> (Columns::ColumnId_Value, ColumnBase::Display_Var) {}
+        VarValueColumn() : Column<ESXRecordT> (Columns::ColumnId_Value, ColumnBase::Display_Var, ColumnBase::Flag_Table | ColumnBase::Flag_Dialogue | ColumnBase::Flag_Dialogue_Refresh) {}
 
         virtual QVariant get (const Record<ESXRecordT>& record) const
         {
@@ -1371,12 +1371,12 @@ namespace CSMWorld
         RotColumn (ESM::Position ESXRecordT::* position, int index, bool door)
         : Column<ESXRecordT> (
           (door ? Columns::ColumnId_DoorPositionXRot : Columns::ColumnId_PositionXRot)+index,
-          ColumnBase::Display_Float), mPosition (position), mIndex (index) {}
+          ColumnBase::Display_Double), mPosition (position), mIndex (index) {}
 
         virtual QVariant get (const Record<ESXRecordT>& record) const
         {
             const ESM::Position& position = record.get().*mPosition;
-            return position.rot[mIndex];
+            return osg::RadiansToDegrees(position.rot[mIndex]);
         }
 
         virtual void set (Record<ESXRecordT>& record, const QVariant& data)
@@ -1385,7 +1385,7 @@ namespace CSMWorld
 
             ESM::Position& position = record2.*mPosition;
 
-            position.rot[mIndex] = data.toFloat();
+            position.rot[mIndex] = osg::DegreesToRadians(data.toFloat());
 
             record.setModified (record2);
         }

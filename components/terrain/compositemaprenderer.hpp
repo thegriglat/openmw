@@ -14,6 +14,12 @@ namespace osg
     class Texture2D;
 }
 
+namespace SceneUtil
+{
+    class UnrefQueue;
+    class WorkQueue;
+}
+
 namespace Terrain
 {
 
@@ -34,13 +40,20 @@ namespace Terrain
     {
     public:
         CompositeMapRenderer();
+        ~CompositeMapRenderer();
 
         virtual void drawImplementation(osg::RenderInfo& renderInfo) const;
 
         void compile(CompositeMap& compositeMap, osg::RenderInfo& renderInfo, double* timeLeft) const;
 
+        /// Set a WorkQueue to delete compiled composite map layers in the background thread
+        void setWorkQueue(SceneUtil::WorkQueue* workQueue);
+
         /// Set the available time in seconds for compiling (non-immediate) composite maps each frame
-        void setTimeAvailableForCompile(double time);
+        void setMinimumTimeAvailableForCompile(double time);
+
+        /// If current frame rate is higher than this, the extra time will be set aside to do more compiling
+        void setTargetFrameRate(float framerate);
 
         /// Add a composite map to be rendered
         void addCompositeMap(CompositeMap* map, bool immediate=false);
@@ -51,14 +64,17 @@ namespace Terrain
         unsigned int getCompileSetSize() const;
 
     private:
-        double mTimeAvailable;
+        float mTargetFrameRate;
+        double mMinimumTimeAvailable;
+        mutable osg::Timer mTimer;
+
+        osg::ref_ptr<SceneUtil::UnrefQueue> mUnrefQueue;
+        osg::ref_ptr<SceneUtil::WorkQueue> mWorkQueue;
 
         typedef std::set<osg::ref_ptr<CompositeMap> > CompileSet;
 
         mutable CompileSet mCompileSet;
         mutable CompileSet mImmediateCompileSet;
-
-        mutable CompileSet mCompiled;
 
         mutable OpenThreads::Mutex mMutex;
 

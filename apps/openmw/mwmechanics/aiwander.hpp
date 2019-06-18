@@ -21,8 +21,81 @@ namespace ESM
 }
 
 namespace MWMechanics
-{       
-    struct AiWanderStorage;
+{
+    /// \brief This class holds the variables AiWander needs which are deleted if the package becomes inactive.
+    struct AiWanderStorage : AiTemporaryBase
+    {
+        // the z rotation angle to reach
+        // when mTurnActorGivingGreetingToFacePlayer is true
+        float mTargetAngleRadians;
+        bool mTurnActorGivingGreetingToFacePlayer;
+        float mReaction; // update some actions infrequently
+
+        enum GreetingState
+        {
+            Greet_None,
+            Greet_InProgress,
+            Greet_Done
+        };
+        GreetingState mSaidGreeting;
+        int mGreetingTimer;
+
+        const MWWorld::CellStore* mCell; // for detecting cell change
+
+        // AiWander states
+        enum WanderState
+        {
+            Wander_ChooseAction,
+            Wander_IdleNow,
+            Wander_MoveNow,
+            Wander_Walking
+        };
+        WanderState mState;
+
+        bool mIsWanderingManually;
+        bool mCanWanderAlongPathGrid;
+
+        unsigned short mIdleAnimation;
+        std::vector<unsigned short> mBadIdles; // Idle animations that when called cause errors
+
+        // do we need to calculate allowed nodes based on mDistance
+        bool mPopulateAvailableNodes;
+
+        // allowed pathgrid nodes based on mDistance from the spawn point
+        // in local coordinates of mCell
+        std::vector<ESM::Pathgrid::Point> mAllowedNodes;
+
+        ESM::Pathgrid::Point mCurrentNode;
+        bool mTrimCurrentNode;
+
+        float mDoorCheckDuration;
+        int mStuckCount;
+
+        AiWanderStorage():
+            mTargetAngleRadians(0),
+            mTurnActorGivingGreetingToFacePlayer(false),
+            mReaction(0),
+            mSaidGreeting(Greet_None),
+            mGreetingTimer(0),
+            mCell(nullptr),
+            mState(Wander_ChooseAction),
+            mIsWanderingManually(false),
+            mCanWanderAlongPathGrid(true),
+            mIdleAnimation(0),
+            mBadIdles(),
+            mPopulateAvailableNodes(true),
+            mAllowedNodes(),
+            mTrimCurrentNode(false),
+            mDoorCheckDuration(0), // TODO: maybe no longer needed
+            mStuckCount(0)
+            {};
+
+        void setState(const WanderState wanderState, const bool isManualWander = false)
+        {
+            mState = wanderState;
+            mIsWanderingManually = isManualWander;
+        }
+    };
 
     /// \brief Causes the Actor to wander within a specified range
     class AiWander : public AiPackage
@@ -47,21 +120,10 @@ namespace MWMechanics
             virtual void writeState(ESM::AiSequence::AiSequence &sequence) const;
 
             virtual void fastForward(const MWWorld::Ptr& actor, AiState& state);
-            
-            bool getRepeat() const;
-            
-            enum GreetingState {
-                Greet_None,
-                Greet_InProgress,
-                Greet_Done
-            };
 
-            enum WanderState {
-                Wander_ChooseAction,
-                Wander_IdleNow,
-                Wander_MoveNow,
-                Wander_Walking
-            };
+            bool getRepeat() const;
+
+            osg::Vec3f getDestination(const MWWorld::Ptr& actor) const;
 
         private:
             // NOTE: mDistance and mDuration must be set already
@@ -75,17 +137,15 @@ namespace MWMechanics
             short unsigned getRandomIdle();
             void setPathToAnAllowedNode(const MWWorld::Ptr& actor, AiWanderStorage& storage, const ESM::Position& actorPos);
             void playGreetingIfPlayerGetsTooClose(const MWWorld::Ptr& actor, AiWanderStorage& storage);
-            void evadeObstacles(const MWWorld::Ptr& actor, AiWanderStorage& storage, float duration, ESM::Position& pos);
-            void playIdleDialogueRandomly(const MWWorld::Ptr& actor);
+            void evadeObstacles(const MWWorld::Ptr& actor, AiWanderStorage& storage);
             void turnActorToFacePlayer(const osg::Vec3f& actorPosition, const osg::Vec3f& playerPosition, AiWanderStorage& storage);
-            void doPerFrameActionsForState(const MWWorld::Ptr& actor, float duration, AiWanderStorage& storage, ESM::Position& pos);
+            void doPerFrameActionsForState(const MWWorld::Ptr& actor, float duration, AiWanderStorage& storage);
             void onIdleStatePerFrameActions(const MWWorld::Ptr& actor, float duration, AiWanderStorage& storage);
-            void onWalkingStatePerFrameActions(const MWWorld::Ptr& actor, float duration, AiWanderStorage& storage, ESM::Position& pos);
+            void onWalkingStatePerFrameActions(const MWWorld::Ptr& actor, float duration, AiWanderStorage& storage);
             void onChooseActionStatePerFrameActions(const MWWorld::Ptr& actor, AiWanderStorage& storage);
             bool reactionTimeActions(const MWWorld::Ptr& actor, AiWanderStorage& storage,
-            const MWWorld::CellStore*& currentCell, bool cellChange, ESM::Position& pos, float duration);
+            const MWWorld::CellStore*& currentCell, bool cellChange, ESM::Position& pos);
             bool isPackageCompleted(const MWWorld::Ptr& actor, AiWanderStorage& storage);
-            void returnToStartLocation(const MWWorld::Ptr& actor, AiWanderStorage& storage, ESM::Position& pos);
             void wanderNearStart(const MWWorld::Ptr &actor, AiWanderStorage &storage, int wanderDistance);
             bool destinationIsAtWater(const MWWorld::Ptr &actor, const osg::Vec3f& destination);
             bool destinationThroughGround(const osg::Vec3f& startPoint, const osg::Vec3f& destination);
@@ -103,6 +163,7 @@ namespace MWMechanics
 
             bool mHasDestination;
             osg::Vec3f mDestination;
+            bool mUsePathgrid;
 
             void getNeighbouringNodes(ESM::Pathgrid::Point dest, const MWWorld::CellStore* currentCell, ESM::Pathgrid::PointList& points);
 

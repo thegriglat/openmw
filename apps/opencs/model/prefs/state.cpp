@@ -3,7 +3,6 @@
 
 #include <stdexcept>
 #include <algorithm>
-#include <sstream>
 
 #include "intsetting.hpp"
 #include "doublesetting.hpp"
@@ -123,6 +122,7 @@ void CSMPrefs::State::declare()
     declareEnum ("double-s", "Shift Double Click", actionRemove).addValues (reportValues);
     declareEnum ("double-c", "Control Double Click", actionEditAndRemove).addValues (reportValues);
     declareEnum ("double-sc", "Shift Control Double Click", actionNone).addValues (reportValues);
+    declareBool("ignore-base-records", "Ignore base records in verifier", false);
 
     declareCategory ("Search & Replace");
     declareInt ("char-before", "Characters before search string", 10).
@@ -200,6 +200,9 @@ void CSMPrefs::State::declare()
     declareDouble ("rotate-factor", "Free rotation factor", 0.007).setPrecision(4).setRange(0.0001, 0.1);
 
     declareCategory ("Rendering");
+    declareInt ("framerate-limit", "FPS limit", 60).
+        setTooltip("Framerate limit in 3D preview windows. Zero value means \"unlimited\".").
+        setRange(0, 10000);
     declareInt ("camera-fov", "Camera FOV", 90).setRange(10, 170);
     declareBool ("camera-ortho", "Orthographic projection for camera", false);
     declareInt ("camera-ortho-size", "Orthographic projection size parameter", 100).
@@ -222,7 +225,15 @@ void CSMPrefs::State::declare()
     EnumValues insertOutsideVisibleCell;
     insertOutsideVisibleCell.add (showAndInsert).add (dontInsert).add (insertAnyway);
 
-    declareCategory ("Scene Drops");
+    EnumValue createAndLandEdit ("Create cell and land, then edit");
+    EnumValue showAndLandEdit ("Show cell and edit");
+    EnumValue dontLandEdit ("Discard");
+    EnumValues landeditOutsideCell;
+    landeditOutsideCell.add (createAndLandEdit).add (dontLandEdit);
+    EnumValues landeditOutsideVisibleCell;
+    landeditOutsideVisibleCell.add (showAndLandEdit).add (dontLandEdit);
+
+    declareCategory ("3D Scene Editing");
     declareInt ("distance", "Drop Distance", 50).
         setTooltip ("If an instance drop can not be placed against another object at the "
             "insert point, it will be placed by this distance from the insert point instead");
@@ -230,6 +241,12 @@ void CSMPrefs::State::declare()
         addValues (insertOutsideCell);
     declareEnum ("outside-visible-drop", "Handling drops outside of visible cells", showAndInsert).
         addValues (insertOutsideVisibleCell);
+    declareEnum ("outside-landedit", "Handling land edit outside of cells", createAndLandEdit).
+        addValues (landeditOutsideCell);
+    declareEnum ("outside-visible-landedit", "Handling land edit outside of visible cells", showAndLandEdit).
+        addValues (landeditOutsideVisibleCell);
+    declareInt ("texturebrush-maximumsize", "Maximum texture brush size", 50).
+        setMin (1);
 
     declareCategory ("Key Bindings");
 
@@ -287,6 +304,7 @@ void CSMPrefs::State::declare()
     declareShortcut ("document-assets-videos", "Open Video Asset List", QKeySequence());
     declareShortcut ("document-debug-run", "Run Debug", QKeySequence());
     declareShortcut ("document-debug-shutdown", "Stop Debug", QKeySequence());
+    declareShortcut ("document-debug-profiles", "Debug Profiles", QKeySequence());
     declareShortcut ("document-debug-runlog", "Open Run Log", QKeySequence());
 
     declareSubcategory ("Table");
@@ -298,8 +316,8 @@ void CSMPrefs::State::declare()
     declareShortcut ("table-remove", "Remove Row/Record", QKeySequence(Qt::Key_Delete));
     declareShortcut ("table-moveup", "Move Record Up", QKeySequence());
     declareShortcut ("table-movedown", "Move Record Down", QKeySequence());
-    declareShortcut ("table-view", "View Record", QKeySequence());
-    declareShortcut ("table-preview", "Preview Record", QKeySequence());
+    declareShortcut ("table-view", "View Record", QKeySequence(Qt::ShiftModifier | Qt::Key_C));
+    declareShortcut ("table-preview", "Preview Record", QKeySequence(Qt::ShiftModifier | Qt::Key_V));
     declareShortcut ("table-extendeddelete", "Extended Record Deletion", QKeySequence());
     declareShortcut ("table-extendedrevert", "Extended Record Revertion", QKeySequence());
 
@@ -374,9 +392,7 @@ CSMPrefs::IntSetting& CSMPrefs::State::declareInt (const std::string& key,
     if (mCurrentCategory==mCategories.end())
         throw std::logic_error ("no category for setting");
 
-    std::ostringstream stream;
-    stream << default_;
-    setDefault (key, stream.str());
+    setDefault(key, std::to_string(default_));
 
     default_ = mSettings.getInt (key, mCurrentCategory->second.getKey());
 
@@ -395,9 +411,7 @@ CSMPrefs::DoubleSetting& CSMPrefs::State::declareDouble (const std::string& key,
     if (mCurrentCategory==mCategories.end())
         throw std::logic_error ("no category for setting");
 
-    std::ostringstream stream;
-    stream << default_;
-    setDefault (key, stream.str());
+    setDefault(key, std::to_string(default_));
 
     default_ = mSettings.getFloat (key, mCurrentCategory->second.getKey());
 

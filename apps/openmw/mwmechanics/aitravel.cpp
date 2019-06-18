@@ -1,15 +1,13 @@
 #include "aitravel.hpp"
 
 #include <components/esm/aisequence.hpp>
-#include <components/esm/loadcell.hpp>
 
-#include "../mwbase/world.hpp"
 #include "../mwbase/environment.hpp"
+#include "../mwbase/world.hpp"
 
 #include "../mwworld/class.hpp"
 #include "../mwworld/cellstore.hpp"
 
-#include "steering.hpp"
 #include "movement.hpp"
 #include "creaturestats.hpp"
 
@@ -28,15 +26,14 @@ bool isWithinMaxRange(const osg::Vec3f& pos1, const osg::Vec3f& pos2)
 
 namespace MWMechanics
 {
-    AiTravel::AiTravel(float x, float y, float z)
-    : mX(x),mY(y),mZ(z)
+    AiTravel::AiTravel(float x, float y, float z, bool hidden)
+    : mX(x),mY(y),mZ(z),mHidden(hidden)
     {
     }
 
     AiTravel::AiTravel(const ESM::AiSequence::AiTravel *travel)
-        : mX(travel->mData.mX), mY(travel->mData.mY), mZ(travel->mData.mZ)
+        : mX(travel->mData.mX), mY(travel->mData.mY), mZ(travel->mData.mZ), mHidden(travel->mHidden)
     {
-
     }
 
     AiTravel *MWMechanics::AiTravel::clone() const
@@ -46,15 +43,31 @@ namespace MWMechanics
 
     bool AiTravel::execute (const MWWorld::Ptr& actor, CharacterController& characterController, AiState& state, float duration)
     {
-        ESM::Position pos = actor.getRefData().getPosition();
+        const osg::Vec3f actorPos(actor.getRefData().getPosition().asVec3());
+        const osg::Vec3f targetPos(mX, mY, mZ);
 
         actor.getClass().getCreatureStats(actor).setMovementFlag(CreatureStats::Flag_Run, false);
         actor.getClass().getCreatureStats(actor).setDrawState(DrawState_Nothing);
 
-        if (!isWithinMaxRange(osg::Vec3f(mX, mY, mZ), pos.asVec3()))
+        if (!isWithinMaxRange(targetPos, actorPos))
             return false;
 
-        if (pathTo(actor, ESM::Pathgrid::Point(static_cast<int>(mX), static_cast<int>(mY), static_cast<int>(mZ)), duration))
+        // Unfortunately, with vanilla assets destination is sometimes blocked by other actor.
+        // If we got close to target, check for actors nearby. If they are, finish AI package.
+        int destinationTolerance = 64;
+        if (distance(actorPos, targetPos) <= destinationTolerance)
+        {
+            std::vector<MWWorld::Ptr> targetActors;
+            std::pair<MWWorld::Ptr, osg::Vec3f> result = MWBase::Environment::get().getWorld()->getHitContact(actor, destinationTolerance, targetActors);
+
+            if (!result.first.isEmpty())
+            {
+                actor.getClass().getMovementSettings(actor).mPosition[1] = 0;
+                return true;
+            }
+        }
+
+        if (pathTo(actor, targetPos, duration))
         {
             actor.getClass().getMovementSettings(actor).mPosition[1] = 0;
             return true;
@@ -64,7 +77,7 @@ namespace MWMechanics
 
     int AiTravel::getTypeId() const
     {
-        return TypeIdTravel;
+        return mHidden ? TypeIdInternalTravel : TypeIdTravel;
     }
 
     void AiTravel::fastForward(const MWWorld::Ptr& actor, AiState& state)
@@ -83,6 +96,7 @@ namespace MWMechanics
         travel->mData.mX = mX;
         travel->mData.mY = mY;
         travel->mData.mZ = mZ;
+        travel->mHidden = mHidden;
 
         ESM::AiSequence::AiPackageContainer package;
         package.mType = ESM::AiSequence::Ai_Travel;

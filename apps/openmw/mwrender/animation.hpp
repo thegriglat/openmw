@@ -35,6 +35,7 @@ namespace MWRender
 class ResetAccumRootCallback;
 class RotateController;
 class GlowUpdater;
+class TransparencyUpdater;
 
 class EffectAnimationTime : public SceneUtil::ControllerSource
 {
@@ -70,6 +71,16 @@ private:
     PartHolder(const PartHolder&);
 };
 typedef std::shared_ptr<PartHolder> PartHolderPtr;
+
+struct EffectParams
+{
+    std::string mModelName; // Just here so we don't add the same effect twice
+    std::shared_ptr<EffectAnimationTime> mAnimTime;
+    float mMaxControllerLength;
+    int mEffectId;
+    bool mLoop;
+    std::string mBoneName;
+};
 
 class Animation : public osg::Referenced
 {
@@ -247,27 +258,16 @@ protected:
 
     osg::Vec3f mAccumulate;
 
-    struct EffectParams
-    {
-        std::string mModelName; // Just here so we don't add the same effect twice
-        PartHolderPtr mObjects;
-        std::shared_ptr<EffectAnimationTime> mAnimTime;
-        float mMaxControllerLength;
-        int mEffectId;
-        bool mLoop;
-        std::string mBoneName;
-    };
-
-    std::vector<EffectParams> mEffects;
-
     TextKeyListener* mTextKeyListener;
 
     osg::ref_ptr<RotateController> mHeadController;
     float mHeadYawRadians;
     float mHeadPitchRadians;
+    bool mHasMagicEffects;
 
     osg::ref_ptr<SceneUtil::LightSource> mGlowLight;
     osg::ref_ptr<GlowUpdater> mGlowUpdater;
+    osg::ref_ptr<TransparencyUpdater> mTransparencyUpdater;
 
     float mAlpha;
 
@@ -309,12 +309,15 @@ protected:
      */
     void setObjectRoot(const std::string &model, bool forceskeleton, bool baseonly, bool isCreature);
 
+    void loadAllAnimationsInFolder(const std::string &model, const std::string &baseModel);
+
     /** Adds the keyframe controllers in the specified model as a new animation source.
      * @note Later added animation sources have the highest priority when it comes to finding a particular animation.
      * @param model The file to add the keyframes for. Note that the .nif file extension will be replaced with .kf.
      * @param baseModel The filename of the mObjectRoot, only used for error messages.
     */
     void addAnimSource(const std::string &model, const std::string& baseModel);
+    void addSingleAnimSource(const std::string &model, const std::string& baseModel);
 
     /** Adds an additional light to the given node using the specified ESM record. */
     void addExtraLight(osg::ref_ptr<osg::Group> parent, const ESM::Light *light);
@@ -347,7 +350,8 @@ public:
 
     /// Set active flag on the object skeleton, if one exists.
     /// @see SceneUtil::Skeleton::setActive
-    void setActive(bool active);
+    /// 0 = Inactive, 1 = Active in place, 2 = Active
+    void setActive(int active);
 
     osg::Group* getOrCreateObjectRoot();
 
@@ -365,6 +369,7 @@ public:
      */
     void addEffect (const std::string& model, int effectId, bool loop = false, const std::string& bonename = "", const std::string& texture = "");
     void removeEffect (int effectId);
+    void removeEffects ();
     void getLoopingEffects (std::vector<int>& out) const;
 
     // Add a spell casting glow to an object. From measuring video taken from the original engine,
@@ -420,7 +425,7 @@ public:
      * \param speedmult Stores the animation speed multiplier
      * \return True if the animation is active, false otherwise.
      */
-    bool getInfo(const std::string &groupname, float *complete=NULL, float *speedmult=NULL) const;
+    bool getInfo(const std::string &groupname, float *complete=nullptr, float *speedmult=nullptr) const;
 
     /// Get the absolute position in the animation track of the first text key with the given group.
     float getStartTime(const std::string &groupname) const;
@@ -446,15 +451,15 @@ public:
     void setLoopingEnabled(const std::string &groupname, bool enabled);
 
     /// This is typically called as part of runAnimation, but may be called manually if needed.
-    void updateEffects(float duration);
+    void updateEffects();
 
-    /// Return a node with the specified name, or NULL if not existing.
+    /// Return a node with the specified name, or nullptr if not existing.
     /// @note The matching is case-insensitive.
     const osg::Node* getNode(const std::string& name) const;
 
     virtual void showWeapons(bool showWeapon) {}
     virtual void showCarriedLeft(bool show) {}
-    virtual void setWeaponGroup(const std::string& group) {}
+    virtual void setWeaponGroup(const std::string& group, bool relativeDuration) {}
     virtual void setVampire(bool vampire) {}
     /// A value < 1 makes the animation translucent, 1.f = fully opaque
     void setAlpha(float alpha);
@@ -472,6 +477,7 @@ public:
     virtual float getHeadPitch() const;
     virtual float getHeadYaw() const;
     virtual void setAccurateAiming(bool enabled) {}
+    virtual bool canBeHarvested() const { return false; }
 
 private:
     Animation(const Animation&);
@@ -481,6 +487,27 @@ private:
 class ObjectAnimation : public Animation {
 public:
     ObjectAnimation(const MWWorld::Ptr& ptr, const std::string &model, Resource::ResourceSystem* resourceSystem, bool animated, bool allowLight);
+
+    bool canBeHarvested() const;
+};
+
+class UpdateVfxCallback : public osg::NodeCallback
+{
+public:
+    UpdateVfxCallback(EffectParams& params)
+        : mFinished(false)
+        , mParams(params)
+        , mStartingTime(0)
+    {
+    }
+
+    bool mFinished;
+    EffectParams mParams;
+
+    virtual void operator()(osg::Node* node, osg::NodeVisitor* nv);
+
+private:
+    double mStartingTime;
 };
 
 }

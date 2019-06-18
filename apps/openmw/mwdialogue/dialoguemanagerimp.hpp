@@ -33,7 +33,6 @@ namespace MWDialogue
 
             Translation::Storage& mTranslationDataStorage;
             MWScript::CompilerContext mCompilerContext;
-            std::ostream mErrorStream;
             Compiler::StreamErrorHandler mErrorHandler;
 
             MWWorld::Ptr mActor;
@@ -94,8 +93,8 @@ namespace MWDialogue
             virtual void persuade (int type, ResponseCallback* callback);
             virtual int getTemporaryDispositionChange () const;
 
-            /// @note This change is temporary and gets discarded when dialogue ends.
-            virtual void applyDispositionChange (int delta);
+            /// @note Controlled by an option, gets discarded when dialogue ends by default
+            virtual void applyBarterDispositionChange (int delta);
 
             virtual int countSavedGameRecords() const;
 

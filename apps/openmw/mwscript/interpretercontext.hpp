@@ -4,7 +4,6 @@
 #include <components/interpreter/context.hpp>
 
 #include "../mwworld/ptr.hpp"
-#include "../mwworld/action.hpp"
 
 namespace MWSound
 {
@@ -93,7 +92,7 @@ namespace MWScript
 
             virtual std::string getActionBinding(const std::string& action) const;
 
-            virtual std::string getNPCName() const;
+            virtual std::string getActorName() const;
 
             virtual std::string getNPCRace() const;
 

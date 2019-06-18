@@ -76,9 +76,9 @@ void CSVWorld::NotEditableSubDelegate::setEditorData (QWidget* editor, const QMo
     else if (CSMWorld::Columns::hasEnums (columnId))
     {
         int data = v.toInt();
-        std::vector<std::string> enumNames (CSMWorld::Columns::getEnums (columnId));
+        std::vector<std::pair<int,std::string>> enumNames (CSMWorld::Columns::getEnums (columnId));
 
-        label->setText(QString::fromUtf8(enumNames.at(data).c_str()));
+        label->setText(QString::fromUtf8(enumNames.at(data).second.c_str()));
     }
     else
     {
@@ -158,7 +158,7 @@ mNotEditableDelegate(table, parent)
 
 CSVWorld::CommandDelegate* CSVWorld::DialogueDelegateDispatcher::makeDelegate(CSMWorld::ColumnBase::Display display)
 {
-    CommandDelegate *delegate = NULL;
+    CommandDelegate *delegate = nullptr;
     std::map<int, CommandDelegate*>::const_iterator delegateIt(mDelegates.find(display));
     if (delegateIt == mDelegates.end())
     {
@@ -251,11 +251,11 @@ QWidget* CSVWorld::DialogueDelegateDispatcher::makeEditor(CSMWorld::ColumnBase::
         variant = index.data(Qt::DisplayRole);
         if (!variant.isValid())
         {
-            return NULL;
+            return nullptr;
         }
     }
 
-    QWidget* editor = NULL;
+    QWidget* editor = nullptr;
     if (! (mTable->flags (index) & Qt::ItemIsEditable))
     {
         return mNotEditableDelegate.createEditor(qobject_cast<QWidget*>(mParent),
@@ -325,7 +325,7 @@ CSVWorld::IdContextMenu::IdContextMenu(QWidget *widget, CSMWorld::ColumnBase::Di
       mWidget(widget),
       mIdType(CSMWorld::TableMimeData::convertEnums(display))
 {
-    Q_ASSERT(mWidget != NULL);
+    Q_ASSERT(mWidget != nullptr);
     Q_ASSERT(CSMWorld::ColumnBase::isId(display));
     Q_ASSERT(mIdType != CSMWorld::UniversalId::Type_None);
 
@@ -339,7 +339,7 @@ CSVWorld::IdContextMenu::IdContextMenu(QWidget *widget, CSMWorld::ColumnBase::Di
     connect(mEditIdAction, SIGNAL(triggered()), this, SLOT(editIdRequest()));
 
     QLineEdit *lineEdit = qobject_cast<QLineEdit *>(mWidget);
-    if (lineEdit != NULL)
+    if (lineEdit != nullptr)
     {
         mContextMenu = lineEdit->createStandardContextMenu();
     }
@@ -360,11 +360,11 @@ QString CSVWorld::IdContextMenu::getWidgetValue() const
     QLabel *label = qobject_cast<QLabel *>(mWidget);
 
     QString value = "";
-    if (lineEdit != NULL)
+    if (lineEdit != nullptr)
     {
         value = lineEdit->text();
     }
-    else if (label != NULL)
+    else if (label != nullptr)
     {
         value = label->text();
     }
@@ -436,7 +436,7 @@ void CSVWorld::EditWidget::createEditorContextMenu(QWidget *editor,
                                                    CSMWorld::ColumnBase::Display display,
                                                    int currentRow) const
 {
-    Q_ASSERT(editor != NULL);
+    Q_ASSERT(editor != nullptr);
 
     if (CSMWorld::ColumnBase::isId(display) &&
         CSMWorld::TableMimeData::convertEnums(display) != CSMWorld::UniversalId::Type_None)
@@ -470,11 +470,11 @@ CSVWorld::EditWidget::EditWidget(QWidget *parent,
         int row, CSMWorld::IdTable* table, CSMWorld::CommandDispatcher& commandDispatcher,
         CSMDoc::Document& document, bool createAndDelete) :
 QScrollArea(parent),
-mWidgetMapper(NULL),
-mNestedTableMapper(NULL),
-mDispatcher(NULL),
-mNestedTableDispatcher(NULL),
-mMainWidget(NULL),
+mWidgetMapper(nullptr),
+mNestedTableMapper(nullptr),
+mDispatcher(nullptr),
+mNestedTableDispatcher(nullptr),
+mMainWidget(nullptr),
 mTable(table),
 mCommandDispatcher (commandDispatcher),
 mDocument (document)
@@ -555,8 +555,8 @@ void CSVWorld::EditWidget::remake(int row)
             if (mTable->hasChildren(mTable->index(row, i)) &&
                     !(flags & CSMWorld::ColumnBase::Flag_Dialogue_List))
             {
-                mNestedModels.push_back(new CSMWorld::NestedTableProxyModel (
-                            mTable->index(row, i), display, dynamic_cast<CSMWorld::IdTree*>(mTable)));
+                CSMWorld::IdTree* innerTable = &dynamic_cast<CSMWorld::IdTree&>(*mTable);
+                mNestedModels.push_back(new CSMWorld::NestedTableProxyModel (mTable->index(row, i), display, innerTable));
 
                 int idColumn = mTable->findColumnIndex (CSMWorld::Columns::ColumnId_Id);
                 int typeColumn = mTable->findColumnIndex (CSMWorld::Columns::ColumnId_RecordType);
@@ -733,7 +733,7 @@ bool CSVWorld::SimpleDialogueSubView::isLocked() const
 CSVWorld::SimpleDialogueSubView::SimpleDialogueSubView (const CSMWorld::UniversalId& id, CSMDoc::Document& document) :
     SubView (id),
     mEditWidget(0),
-    mMainLayout(NULL),
+    mMainLayout(nullptr),
     mTable(dynamic_cast<CSMWorld::IdTable*>(document.getData().getTableModel(id))),
     mLocked(false),
     mDocument(document),

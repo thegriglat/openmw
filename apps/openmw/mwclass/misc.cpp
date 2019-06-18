@@ -1,12 +1,12 @@
 #include "misc.hpp"
 
 #include <components/esm/loadmisc.hpp>
+#include <components/settings/settings.hpp>
 
 #include "../mwbase/environment.hpp"
 #include "../mwbase/world.hpp"
 #include "../mwbase/windowmanager.hpp"
 
-#include "../mwworld/actiontake.hpp"
 #include "../mwworld/cellstore.hpp"
 #include "../mwworld/esmstore.hpp"
 #include "../mwphysics/physicssystem.hpp"
@@ -83,8 +83,24 @@ namespace MWClass
 
         if (ptr.getCellRef().getSoul() != "")
         {
-            const ESM::Creature *creature = MWBase::Environment::get().getWorld()->getStore().get<ESM::Creature>().find(ref->mRef.getSoul());
-            value *= creature->mData.mSoul;
+            const ESM::Creature *creature = MWBase::Environment::get().getWorld()->getStore().get<ESM::Creature>().search(ref->mRef.getSoul());
+            if (creature)
+            {
+                int soul = creature->mData.mSoul;
+                if (Settings::Manager::getBool("rebalance soul gem values", "Game"))
+                {
+                    // use the 'soul gem value rebalance' formula from the Morrowind Code Patch 
+                    float soulValue = 0.0001 * pow(soul, 3) + 2 * soul;
+                    
+                    // for Azura's star add the unfilled value
+                    if (Misc::StringUtils::ciEqual(ptr.getCellRef().getRefId(), "Misc_SoulGem_Azura"))
+                        value += soulValue;
+                    else
+                        value = soulValue;
+                }
+                else
+                    value *= soul;
+            }
         }
 
         return value;
@@ -148,8 +164,9 @@ namespace MWClass
 
         if (ref->mRef.getSoul() != "")
         {
-            const ESM::Creature *creature = store.get<ESM::Creature>().find(ref->mRef.getSoul());
-            info.caption += " (" + creature->mName + ")";
+            const ESM::Creature *creature = store.get<ESM::Creature>().search(ref->mRef.getSoul());
+            if (creature)
+                info.caption += " (" + creature->mName + ")";
         }
 
         std::string text;
@@ -208,9 +225,9 @@ namespace MWClass
         return newPtr;
     }
 
-    std::shared_ptr<MWWorld::Action> Miscellaneous::use (const MWWorld::Ptr& ptr) const
+    std::shared_ptr<MWWorld::Action> Miscellaneous::use (const MWWorld::Ptr& ptr, bool force) const
     {
-        if (ptr.getCellRef().getSoul().empty())
+        if (ptr.getCellRef().getSoul().empty() || !MWBase::Environment::get().getWorld()->getStore().get<ESM::Creature>().search(ptr.getCellRef().getSoul()))
             return std::shared_ptr<MWWorld::Action>(new MWWorld::NullAction());
         else
             return std::shared_ptr<MWWorld::Action>(new MWWorld::ActionSoulgem(ptr));

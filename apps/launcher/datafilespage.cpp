@@ -7,7 +7,10 @@
 #include <QCheckBox>
 #include <QMenu>
 #include <QSortFilterProxyModel>
+#include <thread>
+#include <mutex>
 
+#include <apps/launcher/utils/cellnameloader.hpp>
 #include <components/files/configurationmanager.hpp>
 
 #include <components/contentselector/model/esmfile.hpp>
@@ -16,6 +19,7 @@
 
 #include <components/config/gamesettings.hpp>
 #include <components/config/launchersettings.hpp>
+#include <iostream>
 
 #include "utils/textinputdialog.hpp"
 #include "utils/profilescombobox.hpp"
@@ -32,14 +36,26 @@ Launcher::DataFilesPage::DataFilesPage(Files::ConfigurationManager &cfg, Config:
     ui.setupUi (this);
     setObjectName ("DataFilesPage");
     mSelector = new ContentSelectorView::ContentSelector (ui.contentSelectorWidget);
+    const QString encoding = mGameSettings.value("encoding", "win1252");
+    mSelector->setEncoding(encoding);
 
-    mProfileDialog = new TextInputDialog(tr("New Content List"), tr("Content List name:"), this);
+    mNewProfileDialog = new TextInputDialog(tr("New Content List"), tr("Content List name:"), this);
+    mCloneProfileDialog = new TextInputDialog(tr("Clone Content List"), tr("Content List name:"), this);
 
-    connect(mProfileDialog->lineEdit(), SIGNAL(textChanged(QString)),
-            this, SLOT(updateOkButton(QString)));
+    connect(mNewProfileDialog->lineEdit(), SIGNAL(textChanged(QString)),
+            this, SLOT(updateNewProfileOkButton(QString)));
+    connect(mCloneProfileDialog->lineEdit(), SIGNAL(textChanged(QString)),
+            this, SLOT(updateCloneProfileOkButton(QString)));
 
     buildView();
     loadSettings();
+
+    // Connect signal and slot after the settings have been loaded. We only care about the user changing
+    // the addons and don't want to get signals of the system doing it during startup.
+    connect(mSelector, SIGNAL(signalAddonDataChanged(QModelIndex,QModelIndex)),
+            this, SLOT(slotAddonDataChanged()));
+    // Call manually to indicate all changes to addon data during startup.
+    slotAddonDataChanged();
 }
 
 void Launcher::DataFilesPage::buildView()
@@ -48,6 +64,7 @@ void Launcher::DataFilesPage::buildView()
 
     //tool buttons
     ui.newProfileButton->setToolTip ("Create a new Content List");
+    ui.cloneProfileButton->setToolTip ("Clone the current Content List");
     ui.deleteProfileButton->setToolTip ("Delete an existing Content List");
 
     //combo box
@@ -57,6 +74,7 @@ void Launcher::DataFilesPage::buildView()
 
     // Add the actions to the toolbuttons
     ui.newProfileButton->setDefaultAction (ui.newProfileAction);
+    ui.cloneProfileButton->setDefaultAction (ui.cloneProfileAction);
     ui.deleteProfileButton->setDefaultAction (ui.deleteProfileAction);
 
     //establish connections
@@ -91,15 +109,14 @@ void Launcher::DataFilesPage::populateFileViews(const QString& contentModelName)
 {
     QStringList paths = mGameSettings.getDataDirs();
 
-    foreach(const QString &path, paths)
-        mSelector->addFiles(path);
-
     mDataLocal = mGameSettings.getDataLocal();
 
     if (!mDataLocal.isEmpty())
-        mSelector->addFiles(mDataLocal);
+        paths.insert(0, mDataLocal);
 
-    paths.insert(0, mDataLocal);
+    foreach(const QString &path, paths)
+        mSelector->addFiles(path);
+
     PathIterator pathIterator(paths);
 
     mSelector->setProfileContent(filesInProfile(contentModelName, pathIterator));
@@ -140,6 +157,17 @@ void Launcher::DataFilesPage::saveSettings(const QString &profile)
     }
     mLauncherSettings.setContentList(profileName, fileNames);
     mGameSettings.setContentList(fileNames);
+}
+
+QStringList Launcher::DataFilesPage::selectedFilePaths()
+{
+    //retrieve the files selected for the profile
+    ContentSelectorModel::ContentFileList items = mSelector->selectedFiles();
+    QStringList filePaths;
+    foreach(const ContentSelectorModel::EsmFile *item, items) {
+        filePaths.append(item->filePath());
+    }
+    return filePaths;
 }
 
 void Launcher::DataFilesPage::removeProfile(const QString &profile)
@@ -222,10 +250,10 @@ void Launcher::DataFilesPage::slotProfileChanged(int index)
 
 void Launcher::DataFilesPage::on_newProfileAction_triggered()
 {
-    if (mProfileDialog->exec() != QDialog::Accepted)
+    if (mNewProfileDialog->exec() != QDialog::Accepted)
         return;
 
-    QString profile = mProfileDialog->lineEdit()->text();
+    QString profile = mNewProfileDialog->lineEdit()->text();
 
     if (profile.isEmpty())
         return;
@@ -247,6 +275,20 @@ void Launcher::DataFilesPage::addProfile (const QString &profile, bool setAsCurr
 
     if (setAsCurrent)
         setProfile (ui.profilesComboBox->findText (profile), false);
+}
+
+void Launcher::DataFilesPage::on_cloneProfileAction_triggered()
+{
+    if (mCloneProfileDialog->exec() != QDialog::Accepted)
+        return;
+
+    QString profile = mCloneProfileDialog->lineEdit()->text();
+
+    if (profile.isEmpty())
+        return;
+
+    mLauncherSettings.setContentList(profile, selectedFilePaths());
+    addProfile(profile, true);
 }
 
 void Launcher::DataFilesPage::on_deleteProfileAction_triggered()
@@ -271,17 +313,16 @@ void Launcher::DataFilesPage::on_deleteProfileAction_triggered()
     checkForDefaultProfile();
 }
 
-void Launcher::DataFilesPage::updateOkButton(const QString &text)
+void Launcher::DataFilesPage::updateNewProfileOkButton(const QString &text)
 {
     // We do this here because we need the profiles combobox text
-    if (text.isEmpty()) {
-         mProfileDialog->setOkButtonEnabled(false);
-         return;
-    }
+    mNewProfileDialog->setOkButtonEnabled(!text.isEmpty() && ui.profilesComboBox->findText(text) == -1);
+}
 
-    (ui.profilesComboBox->findText(text) == -1)
-            ? mProfileDialog->setOkButtonEnabled(true)
-            : mProfileDialog->setOkButtonEnabled(false);
+void Launcher::DataFilesPage::updateCloneProfileOkButton(const QString &text)
+{
+    // We do this here because we need the profiles combobox text
+    mCloneProfileDialog->setOkButtonEnabled(!text.isEmpty() && ui.profilesComboBox->findText(text) == -1);
 }
 
 void Launcher::DataFilesPage::checkForDefaultProfile()
@@ -307,4 +348,32 @@ bool Launcher::DataFilesPage::showDeleteMessageBox (const QString &text)
     msgBox.exec();
 
     return (msgBox.clickedButton() == deleteButton);
+}
+
+void Launcher::DataFilesPage::slotAddonDataChanged()
+{
+    QStringList selectedFiles = selectedFilePaths();
+    if (previousSelectedFiles != selectedFiles) {
+        previousSelectedFiles = selectedFiles;
+        // Loading cells for core Morrowind + Expansions takes about 0.2 seconds, which is enough to cause a
+        // barely perceptible UI lag. Splitting into its own thread to alleviate that.
+        std::thread loadCellsThread(&DataFilesPage::reloadCells, this, selectedFiles);
+        loadCellsThread.detach();
+    }
+}
+
+// Mutex lock to run reloadCells synchronously.
+std::mutex _reloadCellsMutex;
+
+void Launcher::DataFilesPage::reloadCells(QStringList selectedFiles)
+{
+    // Use a mutex lock so that we can prevent two threads from executing the rest of this code at the same time
+    // Based on https://stackoverflow.com/a/5429695/531762
+    std::unique_lock<std::mutex> lock(_reloadCellsMutex);
+
+    // The following code will run only if there is not another thread currently running it
+    CellNameLoader cellNameLoader;
+    QStringList cellNamesList = QStringList::fromSet(cellNameLoader.getCellNames(selectedFiles));
+    std::sort(cellNamesList.begin(), cellNamesList.end());
+    emit signalLoadedCellsChanged(cellNamesList);
 }

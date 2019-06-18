@@ -1,54 +1,12 @@
 #include "settings.hpp"
 
 #include <sstream>
-#include <iostream>
 
+#include <components/debug/debuglog.hpp>
 #include <components/misc/stringops.hpp>
 
 #include <boost/filesystem/fstream.hpp>
 #include <boost/algorithm/string.hpp>
-
-namespace
-{
-
-    bool parseBool(const std::string& string)
-    {
-        return (Misc::StringUtils::ciEqual(string, "true"));
-    }
-
-    float parseFloat(const std::string& string)
-    {
-        std::stringstream stream;
-        stream << string;
-        float ret = 0.f;
-        stream >> ret;
-        return ret;
-    }
-
-    int parseInt(const std::string& string)
-    {
-        std::stringstream stream;
-        stream << string;
-        int ret = 0;
-        stream >> ret;
-        return ret;
-    }
-
-    template <typename T>
-    std::string toString(T val)
-    {
-        std::ostringstream stream;
-        stream << val;
-        return stream.str();
-    }
-
-    template <>
-    std::string toString(bool val)
-    {
-        return val ? "true" : "false";
-    }
-
-}
 
 namespace Settings
 {
@@ -69,7 +27,7 @@ public:
         mFile = file;
         boost::filesystem::ifstream stream;
         stream.open(boost::filesystem::path(file));
-        std::cout << "Loading settings file: " << file << std::endl;
+        Log(Debug::Info) << "Loading settings file: " << file;
         std::string currentCategory;
         mLine = 0;
         while (!stream.eof() && !stream.fail())
@@ -186,8 +144,8 @@ public:
                 // Ensure that all options in the current category have been written.
                 for (CategorySettingStatusMap::iterator mit = written.begin(); mit != written.end(); ++mit) {
                     if (mit->second == false && mit->first.first == currentCategory) {
-                        std::cout << "Added new setting: [" << currentCategory << "] "
-                                  << mit->first.second << " = " << settings[mit->first] << std::endl;
+                        Log(Debug::Verbose) << "Added new setting: [" << currentCategory << "] "
+                                  << mit->first.second << " = " << settings[mit->first];
                         ostream << mit->first.second << " = " << settings[mit->first] << std::endl;
                         mit->second = true;
                         changed = true;
@@ -200,7 +158,7 @@ public:
 
                 // Write the (new) current category to the file.
                 ostream << "[" << currentCategory << "]" << std::endl;
-                //std::cout << "Wrote category: " << currentCategory << std::endl;
+                // Log(Debug::Verbose) << "Wrote category: " << currentCategory;
 
                 // A setting can apparently follow the category on an input line.  That's rather
                 // inconvenient, since it makes it more likely to have duplicative sections,
@@ -259,8 +217,8 @@ public:
             finder->second = true;
             // Did we really change it?
             if (value != settings[key]) {
-                std::cout << "Changed setting: [" << currentCategory << "] "
-                          << setting << " = " << settings[key] << std::endl;
+                Log(Debug::Verbose) << "Changed setting: [" << currentCategory << "] "
+                          << setting << " = " << settings[key];
                 changed = true;
             }
             // No need to write the current line, because we just emitted a replacement.
@@ -276,8 +234,8 @@ public:
         // the current category at the end of the file before moving on to any new categories.
         for (CategorySettingStatusMap::iterator mit = written.begin(); mit != written.end(); ++mit) {
             if (mit->second == false && mit->first.first == currentCategory) {
-                std::cout << "Added new setting: [" << mit->first.first << "] "
-                          << mit->first.second << " = " << settings[mit->first] << std::endl;
+                Log(Debug::Verbose) << "Added new setting: [" << mit->first.first << "] "
+                          << mit->first.second << " = " << settings[mit->first];
                 ostream << mit->first.second << " = " << settings[mit->first] << std::endl;
                 mit->second = true;
                 changed = true;
@@ -292,7 +250,7 @@ public:
             ostream << "# to its default, simply remove it from this file.  For available" << std::endl;
             ostream << "# settings, see the file 'settings-default.cfg' or the documentation at:" << std::endl;
             ostream << "#" << std::endl;
-            ostream << "#   http://openmw.readthedocs.io/en/master/reference/modding/settings/index.html" << std::endl;
+            ostream << "#   https://openmw.readthedocs.io/en/master/reference/modding/settings/index.html" << std::endl;
         }
 
         // We still have one more thing to do before we're completely done writing the file.
@@ -305,12 +263,12 @@ public:
                 // If the catgory has changed, write a new category header.
                 if (mit->first.first != currentCategory) {
                     currentCategory = mit->first.first;
-                    std::cout << "Created new setting section: " << mit->first.first << std::endl;
+                    Log(Debug::Verbose) << "Created new setting section: " << mit->first.first;
                     ostream << std::endl;
                     ostream << "[" << currentCategory << "]" << std::endl;
                 }
-                std::cout << "Added new setting: [" << mit->first.first << "] "
-                          << mit->first.second << " = " << settings[mit->first] << std::endl;
+                Log(Debug::Verbose) << "Added new setting: [" << mit->first.first << "] "
+                          << mit->first.second << " = " << settings[mit->first];
                 // Then write the setting.  No need to mark it as written because we're done.
                 ostream << mit->first.second << " = " << settings[mit->first] << std::endl;
                 changed = true;
@@ -319,7 +277,7 @@ public:
 
         // Now install the newly written file in the requested place.
         if (changed) {
-            std::cout << "Updating settings file: " << ipath << std::endl;
+            Log(Debug::Info) << "Updating settings file: " << ipath;
             boost::filesystem::ofstream ofstream;
             ofstream.open(ipath);
             ofstream << ostream.rdbuf();
@@ -393,17 +351,36 @@ std::string Manager::getString(const std::string &setting, const std::string &ca
 
 float Manager::getFloat (const std::string& setting, const std::string& category)
 {
-    return parseFloat( getString(setting, category) );
+    const std::string value = getString(setting, category);
+    try
+    {
+        return std::stof(value);
+    }
+    catch(const std::exception& e)
+    {
+        Log(Debug::Warning) << "Cannot parse setting '" << setting << "' (invalid setting value: " << value << ").";
+        return 0;
+    }
 }
 
 int Manager::getInt (const std::string& setting, const std::string& category)
 {
-    return parseInt( getString(setting, category) );
+    const std::string value = getString(setting, category);
+    try
+    {
+        return std::stoi(value);
+    }
+    catch(const std::exception& e)
+    {
+        Log(Debug::Warning) << "Cannot parse setting '" << setting << "' (invalid setting value: " << value << ").";
+        return 0;
+    }
 }
 
 bool Manager::getBool (const std::string& setting, const std::string& category)
 {
-    return parseBool( getString(setting, category) );
+    const std::string& string = getString(setting, category);
+    return Misc::StringUtils::ciEqual(string, "true");
 }
 
 void Manager::setString(const std::string &setting, const std::string &category, const std::string &value)
@@ -424,24 +401,33 @@ void Manager::setString(const std::string &setting, const std::string &category,
 
 void Manager::setInt (const std::string& setting, const std::string& category, const int value)
 {
-    setString(setting, category, toString(value));
+    setString(setting, category, std::to_string(value));
 }
 
 void Manager::setFloat (const std::string &setting, const std::string &category, const float value)
 {
-    setString(setting, category, toString(value));
+    setString(setting, category, std::to_string(value));
 }
 
 void Manager::setBool(const std::string &setting, const std::string &category, const bool value)
 {
-    setString(setting, category, toString(value));
+    setString(setting, category, value ? "true" : "false");
 }
 
-const CategorySettingVector Manager::apply()
+void Manager::resetPendingChange(const std::string &setting, const std::string &category)
 {
-    CategorySettingVector vec = mChangedSettings;
+    CategorySettingValueMap::key_type key = std::make_pair(category, setting);
+    mChangedSettings.erase(key);
+}
+
+const CategorySettingVector Manager::getPendingChanges()
+{
+    return mChangedSettings;
+}
+
+void Manager::resetPendingChanges()
+{
     mChangedSettings.clear();
-    return vec;
 }
 
 }

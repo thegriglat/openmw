@@ -2,9 +2,7 @@
 
 #include <components/version/version.hpp>
 
-#include <QLabel>
 #include <QDate>
-#include <QTime>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QFontDatabase>
@@ -12,8 +10,6 @@
 #include <QFileDialog>
 #include <QCloseEvent>
 #include <QTextCodec>
-#include <QFile>
-#include <QDir>
 
 #include <QDebug>
 
@@ -21,6 +17,7 @@
 #include "graphicspage.hpp"
 #include "datafilespage.hpp"
 #include "settingspage.hpp"
+#include "advancedpage.hpp"
 
 using namespace Process;
 
@@ -93,16 +90,22 @@ void Launcher::MainDialog::createIcons()
     dataFilesButton->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled);
 
     QListWidgetItem *graphicsButton = new QListWidgetItem(iconWidget);
-    graphicsButton->setIcon(QIcon::fromTheme("video-display"));
+    graphicsButton->setIcon(QIcon(":/images/preferences-video.png"));
     graphicsButton->setText(tr("Graphics"));
     graphicsButton->setTextAlignment(Qt::AlignHCenter | Qt::AlignBottom | Qt::AlignAbsolute);
     graphicsButton->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled);
 
     QListWidgetItem *settingsButton = new QListWidgetItem(iconWidget);
-    settingsButton->setIcon(QIcon::fromTheme("preferences-system"));
+    settingsButton->setIcon(QIcon(":/images/preferences.png"));
     settingsButton->setText(tr("Settings"));
     settingsButton->setTextAlignment(Qt::AlignHCenter | Qt::AlignBottom);
     settingsButton->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled);
+
+    QListWidgetItem *advancedButton = new QListWidgetItem(iconWidget);
+    advancedButton->setIcon(QIcon(":/images/preferences-advanced.png"));
+    advancedButton->setText(tr("Advanced"));
+    advancedButton->setTextAlignment(Qt::AlignHCenter | Qt::AlignBottom);
+    advancedButton->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled);
 
     connect(iconWidget,
             SIGNAL(currentItemChanged(QListWidgetItem*,QListWidgetItem*)),
@@ -116,6 +119,7 @@ void Launcher::MainDialog::createPages()
     mDataFilesPage = new DataFilesPage(mCfgMgr, mGameSettings, mLauncherSettings, this);
     mGraphicsPage = new GraphicsPage(mCfgMgr, mEngineSettings, this);
     mSettingsPage = new SettingsPage(mCfgMgr, mGameSettings, mLauncherSettings, this);
+    mAdvancedPage = new AdvancedPage(mCfgMgr, mGameSettings, mEngineSettings, this);
 
     // Set the combobox of the play page to imitate the combobox on the datafilespage
     mPlayPage->setProfilesModel(mDataFilesPage->profilesModel());
@@ -126,6 +130,7 @@ void Launcher::MainDialog::createPages()
     pagesWidget->addWidget(mDataFilesPage);
     pagesWidget->addWidget(mGraphicsPage);
     pagesWidget->addWidget(mSettingsPage);
+    pagesWidget->addWidget(mAdvancedPage);
 
     // Select the first page
     iconWidget->setCurrentItem(iconWidget->item(0), QItemSelectionModel::Select);
@@ -134,6 +139,8 @@ void Launcher::MainDialog::createPages()
 
     connect(mPlayPage, SIGNAL(signalProfileChanged(int)), mDataFilesPage, SLOT(slotProfileChanged(int)));
     connect(mDataFilesPage, SIGNAL(signalProfileChanged(int)), mPlayPage, SLOT(setProfilesIndex(int)));
+    // Using Qt::QueuedConnection because signal is emitted in a subthread and slot is in the main thread
+    connect(mDataFilesPage, SIGNAL(signalLoadedCellsChanged(QStringList)), mAdvancedPage, SLOT(slotLoadedCellsChanged(QStringList)), Qt::QueuedConnection);
 
 }
 
@@ -243,6 +250,9 @@ bool Launcher::MainDialog::reloadSettings()
         return false;
 
     if (!mGraphicsPage->loadSettings())
+        return false;
+
+    if (!mAdvancedPage->loadSettings())
         return false;
 
     return true;
@@ -483,6 +493,7 @@ bool Launcher::MainDialog::writeSettings()
     mDataFilesPage->saveSettings();
     mGraphicsPage->saveSettings();
     mSettingsPage->saveSettings();
+    mAdvancedPage->saveSettings();
 
     QString userPath = QString::fromUtf8(mCfgMgr.getUserConfigPath().string().c_str());
     QDir dir(userPath);

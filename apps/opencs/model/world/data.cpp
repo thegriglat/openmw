@@ -11,6 +11,8 @@
 #include <components/esm/cellref.hpp>
 
 #include <components/resource/scenemanager.hpp>
+#include <components/sceneutil/shadow.hpp>
+#include <components/shader/shadermanager.hpp>
 #include <components/vfs/manager.hpp>
 #include <components/vfs/registerarchives.hpp>
 
@@ -64,9 +66,9 @@ int CSMWorld::Data::count (RecordBase::State state, const CollectionBase& collec
 }
 
 CSMWorld::Data::Data (ToUTF8::FromType encoding, bool fsStrict, const Files::PathContainer& dataPaths,
-    const std::vector<std::string>& archives, const Fallback::Map* fallback, const boost::filesystem::path& resDir)
+    const std::vector<std::string>& archives, const boost::filesystem::path& resDir)
 : mEncoder (encoding), mPathgrids (mCells), mRefs (mCells),
-  mFallbackMap(fallback), mReader (0), mDialogue (0), mReaderIndex(1),
+  mReader (0), mDialogue (0), mReaderIndex(1),
   mFsStrict(fsStrict), mDataPaths(dataPaths), mArchives(archives)
 {
     mVFS.reset(new VFS::Manager(mFsStrict));
@@ -74,6 +76,14 @@ CSMWorld::Data::Data (ToUTF8::FromType encoding, bool fsStrict, const Files::Pat
 
     mResourcesManager.setVFS(mVFS.get());
     mResourceSystem.reset(new Resource::ResourceSystem(mVFS.get()));
+
+    Shader::ShaderManager::DefineMap defines = mResourceSystem->getSceneManager()->getShaderManager().getGlobalDefines();
+    Shader::ShaderManager::DefineMap shadowDefines = SceneUtil::ShadowManager::getShadowsDisabledDefines();
+    defines["forcePPL"] = "0";
+    defines["clamp"] = "1";
+    for (const auto& define : shadowDefines)
+        defines[define.first] = define.second;
+    mResourceSystem->getSceneManager()->getShaderManager().setGlobalDefines(defines);
 
     mResourceSystem->getSceneManager()->setShaderPath((resDir / "shaders").string());
 
@@ -131,6 +141,23 @@ CSMWorld::Data::Data (ToUTF8::FromType encoding, bool fsStrict, const Files::Pat
         new NestedChildColumn (Columns::ColumnId_Faction, ColumnBase::Display_Faction));
     mFactions.getNestableColumn(index)->addColumn(
         new NestedChildColumn (Columns::ColumnId_FactionReaction, ColumnBase::Display_Integer));
+
+    // Faction Ranks
+    mFactions.addColumn (new NestedParentColumn<ESM::Faction> (Columns::ColumnId_FactionRanks));
+    index = mFactions.getColumns()-1;
+    mFactions.addAdapter (std::make_pair(&mFactions.getColumn(index), new FactionRanksAdapter ()));
+    mFactions.getNestableColumn(index)->addColumn(
+        new NestedChildColumn (Columns::ColumnId_RankName, ColumnBase::Display_Rank));
+    mFactions.getNestableColumn(index)->addColumn(
+        new NestedChildColumn (Columns::ColumnId_FactionAttrib1, ColumnBase::Display_Integer));
+    mFactions.getNestableColumn(index)->addColumn(
+        new NestedChildColumn (Columns::ColumnId_FactionAttrib2, ColumnBase::Display_Integer));
+    mFactions.getNestableColumn(index)->addColumn(
+        new NestedChildColumn (Columns::ColumnId_FactionPrimSkill, ColumnBase::Display_Integer));
+    mFactions.getNestableColumn(index)->addColumn(
+        new NestedChildColumn (Columns::ColumnId_FactionFavSkill, ColumnBase::Display_Integer));
+    mFactions.getNestableColumn(index)->addColumn(
+        new NestedChildColumn (Columns::ColumnId_FactionRep, ColumnBase::Display_Integer));
 
     mRaces.addColumn (new StringIdColumn<ESM::Race>);
     mRaces.addColumn (new RecordStateColumn<ESM::Race>);
@@ -205,7 +232,7 @@ CSMWorld::Data::Data (ToUTF8::FromType encoding, bool fsStrict, const Files::Pat
     mRegions.getNestableColumn(index)->addColumn(
         new NestedChildColumn (Columns::ColumnId_SoundName, ColumnBase::Display_Sound));
     mRegions.getNestableColumn(index)->addColumn(
-        new NestedChildColumn (Columns::ColumnId_SoundChance, ColumnBase::Display_Integer));
+        new NestedChildColumn (Columns::ColumnId_SoundChance, ColumnBase::Display_UnsignedInteger8));
 
     mBirthsigns.addColumn (new StringIdColumn<ESM::BirthSign>);
     mBirthsigns.addColumn (new RecordStateColumn<ESM::BirthSign>);
@@ -326,11 +353,11 @@ CSMWorld::Data::Data (ToUTF8::FromType encoding, bool fsStrict, const Files::Pat
         new NestedChildColumn (Columns::ColumnId_Interior, ColumnBase::Display_Boolean,
         ColumnBase::Flag_Table | ColumnBase::Flag_Dialogue | ColumnBase::Flag_Dialogue_Refresh));
     mCells.getNestableColumn(index)->addColumn(
-        new NestedChildColumn (Columns::ColumnId_Ambient, ColumnBase::Display_Integer));
+        new NestedChildColumn (Columns::ColumnId_Ambient, ColumnBase::Display_Colour));
     mCells.getNestableColumn(index)->addColumn(
-        new NestedChildColumn (Columns::ColumnId_Sunlight, ColumnBase::Display_Integer));
+        new NestedChildColumn (Columns::ColumnId_Sunlight, ColumnBase::Display_Colour));
     mCells.getNestableColumn(index)->addColumn(
-        new NestedChildColumn (Columns::ColumnId_Fog, ColumnBase::Display_Integer));
+        new NestedChildColumn (Columns::ColumnId_Fog, ColumnBase::Display_Colour));
     mCells.getNestableColumn(index)->addColumn(
         new NestedChildColumn (Columns::ColumnId_FogDensity, ColumnBase::Display_Float));
     mCells.getNestableColumn(index)->addColumn(
@@ -571,6 +598,8 @@ CSMWorld::Data::Data (ToUTF8::FromType encoding, bool fsStrict, const Files::Pat
     addModel (new ResourceTable (&mResourcesManager.get (UniversalId::Type_Videos)),
         UniversalId::Type_Video);
     addModel (new IdTable (&mMetaData), UniversalId::Type_MetaData);
+
+    mActorAdapter.reset(new ActorAdapter(*this));
 
     mRefLoadCache.clear(); // clear here rather than startLoading() and continueLoading() for multiple content files
 }
@@ -912,6 +941,16 @@ QAbstractItemModel *CSMWorld::Data::getTableModel (const CSMWorld::UniversalId& 
     return iter->second;
 }
 
+const CSMWorld::ActorAdapter* CSMWorld::Data::getActorAdapter() const
+{
+    return mActorAdapter.get();
+}
+
+CSMWorld::ActorAdapter* CSMWorld::Data::getActorAdapter()
+{
+    return mActorAdapter.get();
+}
+
 void CSMWorld::Data::merge()
 {
     mGlobals.merge();
@@ -962,6 +1001,50 @@ int CSMWorld::Data::startLoading (const boost::filesystem::path& path, bool base
     return mReader->getRecordCount();
 }
 
+void CSMWorld::Data::loadFallbackEntries()
+{
+    // Load default marker definitions, if game files do not have them for some reason
+    std::pair<std::string, std::string> staticMarkers[] = {
+        std::make_pair("DivineMarker", "marker_divine.nif"),
+        std::make_pair("DoorMarker", "marker_arrow.nif"),
+        std::make_pair("NorthMarker", "marker_north.nif"),
+        std::make_pair("TempleMarker", "marker_temple.nif"),
+        std::make_pair("TravelMarker", "marker_travel.nif")
+    };
+
+    std::pair<std::string, std::string> doorMarkers[] = {
+        std::make_pair("PrisonMarker", "marker_prison.nif")
+    };
+
+    for (const auto &marker : staticMarkers)
+    {
+        if (mReferenceables.searchId (marker.first)==-1)
+        {
+            ESM::Static newMarker;
+            newMarker.mId = marker.first;
+            newMarker.mModel = marker.second;
+            CSMWorld::Record<ESM::Static> record;
+            record.mBase = newMarker;
+            record.mState = CSMWorld::RecordBase::State_BaseOnly;
+            mReferenceables.appendRecord (record, CSMWorld::UniversalId::Type_Static);
+        }
+    }
+
+    for (const auto &marker : doorMarkers)
+    {
+        if (mReferenceables.searchId (marker.first)==-1)
+        {
+            ESM::Door newMarker;
+            newMarker.mId = marker.first;
+            newMarker.mModel = marker.second;
+            CSMWorld::Record<ESM::Door> record;
+            record.mBase = newMarker;
+            record.mState = CSMWorld::RecordBase::State_BaseOnly;
+            mReferenceables.appendRecord (record, CSMWorld::UniversalId::Type_Door);
+        }
+    }
+}
+
 bool CSMWorld::Data::continueLoading (CSMDoc::Messages& messages)
 {
     if (!mReader)
@@ -983,6 +1066,9 @@ bool CSMWorld::Data::continueLoading (CSMDoc::Messages& messages)
         mReader = 0;
 
         mDialogue = 0;
+
+        loadFallbackEntries();
+
         return true;
     }
 
@@ -1283,9 +1369,4 @@ void CSMWorld::Data::rowsChanged (const QModelIndex& parent, int start, int end)
 const VFS::Manager* CSMWorld::Data::getVFS() const
 {
     return mVFS.get();
-}
-
-const Fallback::Map* CSMWorld::Data::getFallbackMap() const
-{
-    return mFallbackMap;
 }

@@ -4,12 +4,16 @@
 #include <QDialog>
 #include <QModelIndex>
 
+#ifndef Q_MOC_RUN
+
 #include <boost/filesystem/path.hpp>
 #include "adjusterwidget.hpp"
 
 #ifndef CS_QT_BOOST_FILESYSTEM_PATH_DECLARED
 #define CS_QT_BOOST_FILESYSTEM_PATH_DECLARED
 Q_DECLARE_METATYPE (boost::filesystem::path)
+#endif
+
 #endif
 
 #include "ui_filedialog.h"
@@ -42,6 +46,7 @@ namespace CSVDoc
         void showDialog (ContentAction action);
 
         void addFiles (const QString &path);
+        void setEncoding (const QString &encoding);
         void clearFiles ();
 
         QString filename() const;

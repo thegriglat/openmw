@@ -1,6 +1,5 @@
 #include "journalwindow.hpp"
 
-#include <sstream>
 #include <set>
 #include <stack>
 #include <string>
@@ -43,6 +42,7 @@ namespace
     static char const LeftBookPage [] = "LeftBookPage";
     static char const RightBookPage [] = "RightBookPage";
     static char const LeftTopicIndex [] = "LeftTopicIndex";
+    static char const CenterTopicIndex [] = "CenterTopicIndex";
     static char const RightTopicIndex [] = "RightTopicIndex";
 
     struct JournalWindowImpl : MWGui::JournalBooks, MWGui::JournalWindow
@@ -148,11 +148,12 @@ namespace
                 callback = std::bind(&JournalWindowImpl::notifyIndexLinkClicked, this, std::placeholders::_1);
 
                 getPage (LeftTopicIndex)->adviseLinkClicked (callback);
+                getPage (CenterTopicIndex)->adviseLinkClicked (callback);
                 getPage (RightTopicIndex)->adviseLinkClicked (callback);
             }
 
             adjustButton(PrevPageBTN);
-            adjustButton(NextPageBTN);
+            float nextButtonScale = adjustButton(NextPageBTN);
             adjustButton(CloseBTN);
             adjustButton(CancelBTN);
             adjustButton(JournalBTN);
@@ -167,7 +168,7 @@ namespace
             {
                 // english button has a 7 pixel wide strip of garbage on its right edge
                 nextButton->setSize(64-7, nextButton->getSize().height);
-                nextButton->setImageCoord(MyGUI::IntCoord(0,0,64-7,nextButton->getSize().height));
+                nextButton->setImageCoord(MyGUI::IntCoord(0,0,(64-7)*nextButtonScale,nextButton->getSize().height*nextButtonScale));
             }
 
             if (!questList)
@@ -223,17 +224,6 @@ namespace
             mAllQuests = false;
             mOptionsMode = false;
             mTopicsMode = false;
-        }
-
-        void adjustButton (char const * name)
-        {
-            Gui::ImageButton* button = getWidget<Gui::ImageButton>(name);
-
-            MyGUI::IntSize diff = button->getSize() - button->getRequestedSize();
-            button->setSize(button->getRequestedSize());
-
-            if (button->getAlign().isRight())
-                button->setPosition(button->getPosition() + MyGUI::IntPoint(diff.width,0));
         }
 
         void onOpen()
@@ -312,6 +302,7 @@ namespace
             setVisible (TopicsList, false);
             setVisible (QuestsList, mQuestMode);
             setVisible (LeftTopicIndex, !mQuestMode);
+            setVisible (CenterTopicIndex, !mQuestMode);
             setVisible (RightTopicIndex, !mQuestMode);
             setVisible (ShowAllBTN, mQuestMode && !mAllQuests);
             setVisible (ShowActiveBTN, mQuestMode && mAllQuests);
@@ -465,8 +456,17 @@ namespace
             if (!mTopicIndexBook)
                 mTopicIndexBook = createTopicIndexBook ();
 
-            getPage (LeftTopicIndex)->showPage (mTopicIndexBook, 0);
-            getPage (RightTopicIndex)->showPage (mTopicIndexBook, 1);
+            if (mIndexPagesCount == 3)
+            {
+                getPage (LeftTopicIndex)->showPage (mTopicIndexBook, 0);
+                getPage (CenterTopicIndex)->showPage (mTopicIndexBook, 1);
+                getPage (RightTopicIndex)->showPage (mTopicIndexBook, 2);
+            }
+            else
+            {
+                getPage (LeftTopicIndex)->showPage (mTopicIndexBook, 0);
+                getPage (RightTopicIndex)->showPage (mTopicIndexBook, 1);
+            }
         }
 
         void notifyJournal(MyGUI::Widget* _sender)
@@ -480,6 +480,7 @@ namespace
         void notifyIndexLinkClicked (MWGui::TypesetBook::InteractiveId index)
         {
             setVisible (LeftTopicIndex, false);
+            setVisible (CenterTopicIndex, false);
             setVisible (RightTopicIndex, false);
             setVisible (TopicsList, true);
 
@@ -502,6 +503,7 @@ namespace
             mQuestMode = false;
             mTopicsMode = false;
             setVisible (LeftTopicIndex, true);
+            setVisible (CenterTopicIndex, true);
             setVisible (RightTopicIndex, true);
             setVisible (TopicsList, false);
             setVisible (QuestsList, false);
@@ -540,6 +542,7 @@ namespace
             mQuestMode = true;
 
             setVisible (LeftTopicIndex, false);
+            setVisible (CenterTopicIndex, false);
             setVisible (RightTopicIndex, false);
             setVisible (TopicsList, false);
             setVisible (QuestsList, true);
@@ -651,7 +654,7 @@ MWGui::JournalWindow * MWGui::JournalWindow::create (JournalViewModel::Ptr Model
 }
 
 MWGui::JournalWindow::JournalWindow()
-    :WindowBase("openmw_journal.layout")
+    : BookWindowBase("openmw_journal.layout")
 {
 
 }

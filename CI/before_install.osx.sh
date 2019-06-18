@@ -1,10 +1,9 @@
-#!/bin/sh
+#!/bin/sh -e
 
 brew update
-
-brew outdated cmake || brew upgrade cmake
 brew outdated pkgconfig || brew upgrade pkgconfig
-brew install $macos_qt_formula
+brew install qt
+brew install ccache
 
-curl https://downloads.openmw.org/osx/dependencies/openmw-deps-c40905f.zip -o ~/openmw-deps.zip
-unzip ~/openmw-deps.zip -d /private/tmp/openmw-deps > /dev/null
+curl -fSL -R -J https://downloads.openmw.org/osx/dependencies/openmw-deps-110f3d3.zip -o ~/openmw-deps.zip
+unzip -o ~/openmw-deps.zip -d /private/tmp/openmw-deps > /dev/null

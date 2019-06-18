@@ -2,7 +2,6 @@
 
 #include <cstdlib>
 
-#include <components/compiler/extensions.hpp>
 #include <components/compiler/opcodes.hpp>
 #include <components/compiler/locals.hpp>
 
@@ -16,6 +15,7 @@
 #include "../mwbase/environment.hpp"
 #include "../mwbase/windowmanager.hpp"
 #include "../mwbase/scriptmanager.hpp"
+#include "../mwbase/soundmanager.hpp"
 #include "../mwbase/world.hpp"
 
 #include "../mwworld/class.hpp"
@@ -24,7 +24,9 @@
 #include "../mwworld/inventorystore.hpp"
 #include "../mwworld/esmstore.hpp"
 #include "../mwworld/cellstore.hpp"
+#include "../mwworld/manualref.hpp"
 
+#include "../mwmechanics/aicast.hpp"
 #include "../mwmechanics/npcstats.hpp"
 #include "../mwmechanics/creaturestats.hpp"
 #include "../mwmechanics/spellcasting.hpp"
@@ -106,8 +108,7 @@ namespace MWScript
             virtual void execute (Interpreter::Runtime& runtime)
             {
                 MWBase::World* world = MWBase::Environment::get().getWorld();
-                MWWorld::Ptr player = world->getPlayerPtr();
-                runtime.push (!world->isOnGround(player) && !world->isFlying(player));
+                runtime.push (world->getPlayer().getJumping());
             }
         };
 
@@ -251,6 +252,20 @@ namespace MWScript
 
                     runtime.getContext().report (enabled ?
                         "Wireframe Rendering -> On" : "Wireframe Rendering -> Off");
+                }
+        };
+
+        class OpToggleBorders : public Interpreter::Opcode0
+        {
+            public:
+
+                virtual void execute (Interpreter::Runtime& runtime)
+                {
+                    bool enabled =
+                        MWBase::Environment::get().getWorld()->toggleBorders();
+
+                    runtime.getContext().report (enabled ?
+                        "Border Rendering -> On" : "Border Rendering -> Off");
                 }
         };
 
@@ -417,6 +432,12 @@ namespace MWScript
                     std::string effect = runtime.getStringLiteral(runtime[0].mInteger);
                     runtime.pop();
 
+                    if (!ptr.getClass().isActor())
+                    {
+                        runtime.push(0);
+                        return;
+                    }
+
                     char *end;
                     long key = strtol(effect.c_str(), &end, 10);
                     if(key < 0 || key > 32767 || *end != '\0')
@@ -450,11 +471,20 @@ namespace MWScript
                     std::string gem = runtime.getStringLiteral (runtime[0].mInteger);
                     runtime.pop();
 
+                    if (!ptr.getClass().hasInventoryStore(ptr))
+                        return;
+
                     const MWWorld::ESMStore& store = MWBase::Environment::get().getWorld()->getStore();
                     store.get<ESM::Creature>().find(creature); // This line throws an exception if it can't find the creature
 
                     MWWorld::Ptr item = *ptr.getClass().getContainerStore(ptr).add(gem, 1, ptr);
+
+                    // Set the soul on just one of the gems, not the whole stack
+                    item.getContainerStore()->unstack(item, ptr);
                     item.getCellRef().setSoul(creature);
+
+                    // Restack the gem with other gems with the same soul
+                    item.getContainerStore()->restack(item);
                 }
         };
 
@@ -474,7 +504,10 @@ namespace MWScript
                     for (unsigned int i=0; i<arg0; ++i)
                         runtime.pop();
 
-                    MWWorld::ContainerStore& store = ptr.getClass().getContainerStore (ptr);
+                    if (!ptr.getClass().hasInventoryStore(ptr))
+                        return;
+
+                    MWWorld::InventoryStore& store = ptr.getClass().getInventoryStore(ptr);
                     for (MWWorld::ContainerStoreIterator it = store.begin(); it != store.end(); ++it)
                     {
                         if (::Misc::StringUtils::ciEqual(it->getCellRef().getSoul(), soul))
@@ -509,16 +542,18 @@ namespace MWScript
                     if (amount == 0)
                         return;
 
-                    // Prefer dropping unequipped items first; re-stack if possible by unequipping items before dropping them.
-                    MWWorld::InventoryStore *invStorePtr = 0;
-                    if (ptr.getClass().hasInventoryStore(ptr)) {
-                        invStorePtr = &ptr.getClass().getInventoryStore(ptr);
+                    if (!ptr.getClass().isActor())
+                        return;
 
-                        int numNotEquipped = invStorePtr->count(item);
+                    if (ptr.getClass().hasInventoryStore(ptr))
+                    {
+                        // Prefer dropping unequipped items first; re-stack if possible by unequipping items before dropping them.
+                        MWWorld::InventoryStore& store = ptr.getClass().getInventoryStore(ptr);
+                        int numNotEquipped = store.count(item);
                         for (int slot = 0; slot < MWWorld::InventoryStore::Slots; ++slot)
                         {
-                            MWWorld::ConstContainerStoreIterator it = invStorePtr->getSlot (slot);
-                            if (it != invStorePtr->end() && ::Misc::StringUtils::ciEqual(it->getCellRef().getRefId(), item))
+                            MWWorld::ConstContainerStoreIterator it = store.getSlot (slot);
+                            if (it != store.end() && ::Misc::StringUtils::ciEqual(it->getCellRef().getRefId(), item))
                             {
                                 numNotEquipped -= it->getRefData().getCount();
                             }
@@ -526,37 +561,48 @@ namespace MWScript
 
                         for (int slot = 0; slot < MWWorld::InventoryStore::Slots && amount > numNotEquipped; ++slot)
                         {
-                            MWWorld::ContainerStoreIterator it = invStorePtr->getSlot (slot);
-                            if (it != invStorePtr->end() && ::Misc::StringUtils::ciEqual(it->getCellRef().getRefId(), item))
+                            MWWorld::ContainerStoreIterator it = store.getSlot (slot);
+                            if (it != store.end() && ::Misc::StringUtils::ciEqual(it->getCellRef().getRefId(), item))
                             {
-                                int numToRemove = it->getRefData().getCount();
-                                if (numToRemove > amount - numNotEquipped)
-                                {
-                                    numToRemove = amount - numNotEquipped;
-                                }
-                                invStorePtr->unequipItemQuantity(*it, ptr, numToRemove);
+                                int numToRemove = std::min(amount - numNotEquipped, it->getRefData().getCount());
+                                store.unequipItemQuantity(*it, ptr, numToRemove);
                                 numNotEquipped += numToRemove;
+                            }
+                        }
+
+                        for (MWWorld::ContainerStoreIterator iter (store.begin()); iter!=store.end(); ++iter)
+                        {
+                            if (::Misc::StringUtils::ciEqual(iter->getCellRef().getRefId(), item) && !store.isEquipped(*iter))
+                            {
+                                int removed = store.remove(*iter, amount, ptr);
+                                MWWorld::Ptr dropped = MWBase::Environment::get().getWorld()->dropObjectOnGround(ptr, *iter, removed);
+                                dropped.getCellRef().setOwner("");
+
+                                amount -= removed;
+
+                                if (amount <= 0)
+                                    break;
                             }
                         }
                     }
 
-                    int toRemove = amount;
-                    MWWorld::ContainerStore& store = ptr.getClass().getContainerStore (ptr);
-                    for (MWWorld::ContainerStoreIterator iter (store.begin()); iter!=store.end(); ++iter)
+                    MWWorld::ManualRef ref(MWBase::Environment::get().getWorld()->getStore(), item, 1);
+                    MWWorld::Ptr itemPtr(ref.getPtr());
+                    if (amount > 0)
                     {
-                        if (::Misc::StringUtils::ciEqual(iter->getCellRef().getRefId(), item)
-                                && (!invStorePtr || !invStorePtr->isEquipped(*iter)))
+                        if (itemPtr.getClass().getScript(itemPtr).empty())
                         {
-                            int removed = store.remove(*iter, toRemove, ptr);
-                            MWWorld::Ptr dropped = MWBase::Environment::get().getWorld()->dropObjectOnGround(ptr, *iter, removed);
-                            dropped.getCellRef().setOwner("");
-
-                            toRemove -= removed;
-
-                            if (toRemove <= 0)
-                                break;
+                            MWBase::Environment::get().getWorld()->dropObjectOnGround(ptr, itemPtr, amount);
+                        }
+                        else
+                        {
+                            // Dropping one item per time to prevent making stacks of scripted items
+                            for (int i = 0; i < amount; i++)
+                                MWBase::Environment::get().getWorld()->dropObjectOnGround(ptr, itemPtr, 1);
                         }
                     }
+
+                    MWBase::Environment::get().getSoundManager()->playSound3D(ptr, itemPtr.getClass().getDownSoundId(itemPtr), 1.f, 1.f);
                 }
         };
 
@@ -573,8 +619,10 @@ namespace MWScript
                     std::string soul = runtime.getStringLiteral (runtime[0].mInteger);
                     runtime.pop();
 
-                    MWWorld::ContainerStore& store = ptr.getClass().getContainerStore (ptr);
+                    if (!ptr.getClass().hasInventoryStore(ptr))
+                        return;
 
+                    MWWorld::InventoryStore& store = ptr.getClass().getInventoryStore(ptr);
 
                     for (MWWorld::ContainerStoreIterator iter (store.begin()); iter!=store.end(); ++iter)
                     {
@@ -638,6 +686,12 @@ namespace MWScript
                     MWWorld::Ptr ptr = R()(runtime);
                     std::string id = runtime.getStringLiteral(runtime[0].mInteger);
                     runtime.pop();
+
+                    if (!ptr.getClass().isActor())
+                    {
+                        runtime.push(0);
+                        return;
+                    }
 
                     const MWMechanics::CreatureStats& stats = ptr.getClass().getCreatureStats(ptr);
                     runtime.push(stats.getActiveSpells().isSpellActive(id) || stats.getSpells().isSpellActive(id));
@@ -920,7 +974,7 @@ namespace MWScript
 
                 const std::string script = ptr.getClass().getScript(ptr);
                 if(script.empty())
-                    str<< ptr.getCellRef().getRefId()<<"  does not have a script.";
+                    str<< ptr.getCellRef().getRefId()<<" does not have a script.";
                 else
                 {
                     str<< "Local variables for "<<ptr.getCellRef().getRefId();
@@ -1036,15 +1090,46 @@ namespace MWScript
             {
                 MWWorld::Ptr ptr = R()(runtime);
 
-                std::string spell = runtime.getStringLiteral (runtime[0].mInteger);
+                std::string spellId = runtime.getStringLiteral (runtime[0].mInteger);
                 runtime.pop();
 
                 std::string targetId = ::Misc::StringUtils::lowerCase(runtime.getStringLiteral (runtime[0].mInteger));
                 runtime.pop();
 
+                const ESM::Spell* spell = MWBase::Environment::get().getWorld()->getStore().get<ESM::Spell>().search(spellId);
+                if (!spell)
+                {
+                    runtime.getContext().report("spellcasting failed: cannot find spell \""+spellId+"\"");
+                    return;
+                }
+
+                if (spell->mData.mType != ESM::Spell::ST_Spell && spell->mData.mType != ESM::Spell::ST_Power)
+                {
+                    runtime.getContext().report("spellcasting failed: you can only cast spells and powers.");
+                    return;
+                }
+
+                if (ptr == MWMechanics::getPlayer())
+                {
+                    MWWorld::InventoryStore& store = ptr.getClass().getInventoryStore(ptr);
+                    store.setSelectedEnchantItem(store.end());
+                    MWBase::Environment::get().getWindowManager()->setSelectedSpell(spellId, int(MWMechanics::getSpellSuccessChance(spellId, ptr)));
+                    MWBase::Environment::get().getWindowManager()->updateSpellWindow();
+                    return;
+                }
+
+                if (ptr.getClass().isActor())
+                {
+                    MWMechanics::AiCast castPackage(targetId, spellId, true);
+                    ptr.getClass().getCreatureStats (ptr).getAiSequence().stack(castPackage, ptr);
+
+                    return;
+                }
+
                 MWWorld::Ptr target = MWBase::Environment::get().getWorld()->getPtr (targetId, false);
 
-                MWMechanics::CastSpell cast(ptr, target);
+                MWMechanics::CastSpell cast(ptr, target, false, true);
+                cast.playSpellCastingEffects(spell->mId, false);
                 cast.mHitPosition = target.getRefData().getPosition().asVec3();
                 cast.mAlwaysSucceed = true;
                 cast.cast(spell);
@@ -1062,7 +1147,7 @@ namespace MWScript
                 std::string spell = runtime.getStringLiteral (runtime[0].mInteger);
                 runtime.pop();
 
-                MWMechanics::CastSpell cast(ptr, ptr);
+                MWMechanics::CastSpell cast(ptr, ptr, false, true);
                 cast.mHitPosition = ptr.getRefData().getPosition().asVec3();
                 cast.mAlwaysSucceed = true;
                 cast.cast(spell);
@@ -1118,8 +1203,7 @@ namespace MWScript
 
                 virtual void execute (Interpreter::Runtime &runtime)
                 {
-                    /// \todo implement traveling check
-                    runtime.push (0);
+                    runtime.push (MWBase::Environment::get().getWorld()->isPlayerTraveling());
                 }
         };
 
@@ -1275,6 +1359,65 @@ namespace MWScript
             }
         };
 
+        class OpToggleNavMesh : public Interpreter::Opcode0
+        {
+            public:
+
+                virtual void execute (Interpreter::Runtime& runtime)
+                {
+                    bool enabled =
+                        MWBase::Environment::get().getWorld()->toggleRenderMode (MWRender::Render_NavMesh);
+
+                    runtime.getContext().report (enabled ?
+                        "Navigation Mesh Rendering -> On" : "Navigation Mesh Rendering -> Off");
+                }
+        };
+
+        class OpToggleActorsPaths : public Interpreter::Opcode0
+        {
+            public:
+
+                virtual void execute (Interpreter::Runtime& runtime)
+                {
+                    bool enabled =
+                        MWBase::Environment::get().getWorld()->toggleRenderMode (MWRender::Render_ActorsPaths);
+
+                    runtime.getContext().report (enabled ?
+                        "Agents Paths Rendering -> On" : "Agents Paths Rendering -> Off");
+                }
+        };
+
+        class OpSetNavMeshNumberToRender : public Interpreter::Opcode0
+        {
+            public:
+
+                virtual void execute (Interpreter::Runtime& runtime)
+                {
+                    const auto navMeshNumber = runtime[0].mInteger;
+                    runtime.pop();
+
+                    if (navMeshNumber < 0)
+                    {
+                        runtime.getContext().report("Invalid navmesh number: use not less than zero values");
+                        return;
+                    }
+
+                    MWBase::Environment::get().getWorld()->setNavMeshNumberToRender(static_cast<std::size_t>(navMeshNumber));
+                }
+        };
+
+        template <class R>
+        class OpRepairedOnMe : public Interpreter::Opcode0
+        {
+            public:
+
+                virtual void execute (Interpreter::Runtime& runtime)
+                {
+                    // Broken in vanilla and deliberately no-op.
+                    runtime.push(0);
+                }
+        };
+
         void installOpcodes (Interpreter::Interpreter& interpreter)
         {
             interpreter.installSegment5 (Compiler::Misc::opcodeXBox, new OpXBox);
@@ -1374,6 +1517,12 @@ namespace MWScript
             interpreter.installSegment5 (Compiler::Misc::opcodeRemoveFromLevItem, new OpRemoveFromLevItem);
             interpreter.installSegment3 (Compiler::Misc::opcodeShowSceneGraph, new OpShowSceneGraph<ImplicitRef>);
             interpreter.installSegment3 (Compiler::Misc::opcodeShowSceneGraphExplicit, new OpShowSceneGraph<ExplicitRef>);
+            interpreter.installSegment5 (Compiler::Misc::opcodeToggleBorders, new OpToggleBorders);
+            interpreter.installSegment5 (Compiler::Misc::opcodeToggleNavMesh, new OpToggleNavMesh);
+            interpreter.installSegment5 (Compiler::Misc::opcodeToggleActorsPaths, new OpToggleActorsPaths);
+            interpreter.installSegment5 (Compiler::Misc::opcodeSetNavMeshNumberToRender, new OpSetNavMeshNumberToRender);
+            interpreter.installSegment5 (Compiler::Misc::opcodeRepairedOnMe, new OpRepairedOnMe<ImplicitRef>);
+            interpreter.installSegment5 (Compiler::Misc::opcodeRepairedOnMeExplicit, new OpRepairedOnMe<ExplicitRef>);
         }
     }
 }

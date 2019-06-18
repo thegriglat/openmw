@@ -6,23 +6,49 @@
 #include <osg/Texture2D>
 #include <osg/RenderInfo>
 
+#include <components/sceneutil/unrefqueue.hpp>
+#include <components/sceneutil/workqueue.hpp>
+
+#include <algorithm>
+
 namespace Terrain
 {
 
 CompositeMapRenderer::CompositeMapRenderer()
-    : mTimeAvailable(0.0005)
+    : mTargetFrameRate(120)
+    , mMinimumTimeAvailable(0.0025)
 {
     setSupportsDisplayList(false);
     setCullingActive(false);
 
     mFBO = new osg::FrameBufferObject;
 
+    mUnrefQueue = new SceneUtil::UnrefQueue;
+
     getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
+}
+
+CompositeMapRenderer::~CompositeMapRenderer()
+{
+}
+
+void CompositeMapRenderer::setWorkQueue(SceneUtil::WorkQueue* workQueue)
+{
+    mWorkQueue = workQueue;
 }
 
 void CompositeMapRenderer::drawImplementation(osg::RenderInfo &renderInfo) const
 {
-    mCompiled.clear();
+    double dt = mTimer.time_s();
+    dt = std::min(dt, 0.2);
+    mTimer.setStartTick();
+    double targetFrameTime = 1.0/static_cast<double>(mTargetFrameRate);
+    double conservativeTimeRatio(0.75);
+    double availableTime = std::max((targetFrameTime - dt)*conservativeTimeRatio,
+                                    mMinimumTimeAvailable);
+
+    if (mWorkQueue)
+        mUnrefQueue->flush(mWorkQueue.get());
 
     OpenThreads::ScopedLock<OpenThreads::Mutex> lock(mMutex);
 
@@ -31,28 +57,33 @@ void CompositeMapRenderer::drawImplementation(osg::RenderInfo &renderInfo) const
 
     while (!mImmediateCompileSet.empty())
     {
-        CompositeMap* node = *mImmediateCompileSet.begin();
-        mCompiled.insert(node);
+        osg::ref_ptr<CompositeMap> node = *mImmediateCompileSet.begin();
+        mImmediateCompileSet.erase(node);
 
-        compile(*node, renderInfo, NULL);
-
-        mImmediateCompileSet.erase(mImmediateCompileSet.begin());
+        mMutex.unlock();
+        compile(*node, renderInfo, nullptr);
+        mMutex.lock();
     }
 
-    double timeLeft = mTimeAvailable;
+    double timeLeft = availableTime;
 
     while (!mCompileSet.empty() && timeLeft > 0)
     {
-        CompositeMap* node = *mCompileSet.begin();
+        osg::ref_ptr<CompositeMap> node = *mCompileSet.begin();
+        mCompileSet.erase(node);
 
+        mMutex.unlock();
         compile(*node, renderInfo, &timeLeft);
+        mMutex.lock();
 
-        if (node->mCompiled >= node->mDrawables.size())
+        if (node->mCompiled < node->mDrawables.size())
         {
-            mCompiled.insert(node);
-            mCompileSet.erase(mCompileSet.begin());
+            // We did not compile the map fully.
+            // Place it back to queue to continue work in the next time.
+            mCompileSet.insert(node);
         }
     }
+    mTimer.setStartTick();
 }
 
 void CompositeMapRenderer::compile(CompositeMap &compositeMap, osg::RenderInfo &renderInfo, double* timeLeft) const
@@ -110,6 +141,12 @@ void CompositeMapRenderer::compile(CompositeMap &compositeMap, osg::RenderInfo &
 
         ++compositeMap.mCompiled;
 
+        if (mWorkQueue)
+        {
+            mUnrefQueue->push(compositeMap.mDrawables[i]);
+        }
+        compositeMap.mDrawables[i] = nullptr;
+
         if (timeLeft)
         {
             *timeLeft -= timer.time_s();
@@ -119,6 +156,8 @@ void CompositeMapRenderer::compile(CompositeMap &compositeMap, osg::RenderInfo &
                 break;
         }
     }
+    if (compositeMap.mCompiled == compositeMap.mDrawables.size())
+        compositeMap.mDrawables = std::vector<osg::ref_ptr<osg::Drawable>>();
 
     state.haveAppliedAttribute(osg::StateAttribute::VIEWPORT);
 
@@ -126,9 +165,14 @@ void CompositeMapRenderer::compile(CompositeMap &compositeMap, osg::RenderInfo &
     ext->glBindFramebuffer(GL_FRAMEBUFFER_EXT, fboId);
 }
 
-void CompositeMapRenderer::setTimeAvailableForCompile(double time)
+void CompositeMapRenderer::setMinimumTimeAvailableForCompile(double time)
 {
-    mTimeAvailable = time;
+    mMinimumTimeAvailable = time;
+}
+
+void CompositeMapRenderer::setTargetFrameRate(float framerate)
+{
+    mTargetFrameRate = framerate;
 }
 
 void CompositeMapRenderer::addCompositeMap(CompositeMap* compositeMap, bool immediate)

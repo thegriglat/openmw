@@ -12,7 +12,7 @@
 #include "steering.hpp"
 
 MWMechanics::AiAvoidDoor::AiAvoidDoor(const MWWorld::ConstPtr& doorPtr)
-: AiPackage(), mDuration(1), mDoorPtr(doorPtr), mAdjAngle(0)
+: AiPackage(), mDuration(1), mDoorPtr(doorPtr), mLastPos(ESM::Position()), mAdjAngle(0)
 {
 
 }
@@ -33,9 +33,9 @@ bool MWMechanics::AiAvoidDoor::execute (const MWWorld::Ptr& actor, CharacterCont
         float distance = x * x + y * y + z * z;
         if(distance < 10 * 10) { //Got stuck, didn't move
             if(mAdjAngle == 0) //Try going in various directions
-                mAdjAngle = 1.57079632679f; //pi/2
-            else if (mAdjAngle == 1.57079632679f)
-                mAdjAngle = -1.57079632679f;
+                mAdjAngle = osg::PI / 2;
+            else if (mAdjAngle == osg::PI / 2)
+                mAdjAngle = -osg::PI / 2;
             else
                 mAdjAngle = 0;
             mDuration = 1; //reset timer

@@ -1,5 +1,6 @@
 #include "charactercreation.hpp"
 
+#include <components/debug/debuglog.hpp>
 #include <components/fallback/fallback.hpp>
 
 #include "../mwbase/environment.hpp"
@@ -32,14 +33,15 @@ namespace
     };
 
     const ESM::Class::Specialization mSpecializations[3]={ESM::Class::Combat, ESM::Class::Magic, ESM::Class::Stealth}; // The specialization for each answer
-    Step sGenerateClassSteps(int number) {
+    Step sGenerateClassSteps(int number)
+    {
         number++;
-        const Fallback::Map* fallback=MWBase::Environment::get().getWorld()->getFallback();
-        Step step = {fallback->getFallbackString("Question_"+MyGUI::utility::toString(number)+"_Question"),
-        {fallback->getFallbackString("Question_"+MyGUI::utility::toString(number)+"_AnswerOne"),
-        fallback->getFallbackString("Question_"+MyGUI::utility::toString(number)+"_AnswerTwo"),
-        fallback->getFallbackString("Question_"+MyGUI::utility::toString(number)+"_AnswerThree")},
-        "vo\\misc\\chargen qa"+MyGUI::utility::toString(number)+".wav"
+        Step step = {
+            Fallback::Map::getString("Question_"+MyGUI::utility::toString(number)+"_Question"),
+            {Fallback::Map::getString("Question_"+MyGUI::utility::toString(number)+"_AnswerOne"),
+            Fallback::Map::getString("Question_"+MyGUI::utility::toString(number)+"_AnswerTwo"),
+            Fallback::Map::getString("Question_"+MyGUI::utility::toString(number)+"_AnswerThree")},
+            "vo\\misc\\chargen qa"+MyGUI::utility::toString(number)+".wav"
         };
         return step;
     }
@@ -256,19 +258,17 @@ namespace MWGui
 
                     {
                         std::map<int, MWMechanics::AttributeValue > attributes = MWBase::Environment::get().getWindowManager()->getPlayerAttributeValues();
-                        for (std::map<int, MWMechanics::AttributeValue >::iterator it = attributes.begin();
-                            it != attributes.end(); ++it)
+                        for (auto& attributePair : attributes)
                         {
-                            mReviewDialog->setAttribute(static_cast<ESM::Attribute::AttributeID> (it->first), it->second);
+                            mReviewDialog->setAttribute(static_cast<ESM::Attribute::AttributeID> (attributePair.first), attributePair.second);
                         }
                     }
 
                     {
                         std::map<int, MWMechanics::SkillValue > skills = MWBase::Environment::get().getWindowManager()->getPlayerSkillValues();
-                        for (std::map<int, MWMechanics::SkillValue >::iterator it = skills.begin();
-                            it != skills.end(); ++it)
+                        for (auto& skillPair : skills)
                         {
-                            mReviewDialog->setSkillValue(static_cast<ESM::Skill::SkillEnum> (it->first), it->second);
+                            mReviewDialog->setSkillValue(static_cast<ESM::Skill::SkillEnum> (skillPair.first), skillPair.second);
                         }
                         mReviewDialog->configureSkills(MWBase::Environment::get().getWindowManager()->getPlayerMajorSkills(), MWBase::Environment::get().getWindowManager()->getPlayerMinorSkills());
                     }
@@ -284,7 +284,7 @@ namespace MWGui
         }
         catch (std::exception& e)
         {
-            std::cerr << "Error: Failed to create chargen window: " << e.what() << std::endl;
+            Log(Debug::Error) << "Error: Failed to create chargen window: " << e.what();
         }
     }
 
@@ -553,7 +553,7 @@ namespace MWGui
     {
         if (mGenerateClassStep == 10)
         {
-            static boost::array<ClassPoint, 23> classes = { {
+            static std::array<ClassPoint, 23> classes = { {
                 {"Acrobat",     {6, 2, 2}},
                 {"Agent",       {6, 1, 3}},
                 {"Archer",      {3, 5, 2}},
@@ -602,7 +602,7 @@ namespace MWGui
                     mGenerateClass = "Mage";
                 else
                 {
-                    std::cout << "Failed to deduce class from chosen answers in generate class dialog" << std::endl;
+                    Log(Debug::Warning) << "Failed to deduce class from chosen answers in generate class dialog.";
                     mGenerateClass = "Thief";
                 }
             }

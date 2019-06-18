@@ -74,17 +74,19 @@ private:
 
     void updateNpcBase();
 
+    NpcType getNpcType();
+
     PartHolderPtr insertBoundedPart(const std::string &model, const std::string &bonename,
-                                        const std::string &bonefilter, bool enchantedGlow, osg::Vec4f* glowColor=NULL);
+                                        const std::string &bonefilter, bool enchantedGlow, osg::Vec4f* glowColor=nullptr);
 
     void removeIndividualPart(ESM::PartReferenceType type);
     void reserveIndividualPart(ESM::PartReferenceType type, int group, int priority);
 
     bool addOrReplaceIndividualPart(ESM::PartReferenceType type, int group, int priority, const std::string &mesh,
-                                    bool enchantedGlow=false, osg::Vec4f* glowColor=NULL);
+                                    bool enchantedGlow=false, osg::Vec4f* glowColor=nullptr);
     void removePartGroup(int group);
     void addPartGroup(int group, int priority, const std::vector<ESM::PartReference> &parts,
-                                    bool enchantedGlow=false, osg::Vec4f* glowColor=NULL);
+                                    bool enchantedGlow=false, osg::Vec4f* glowColor=nullptr);
 
     virtual void setRenderBin();
 
@@ -95,6 +97,7 @@ private:
 
 protected:
     virtual void addControllers();
+    virtual bool isArrowAttached() const;
 
 public:
     /**
@@ -116,7 +119,7 @@ public:
     /// 0: the first person meshes follow the camera with a reduced factor, so you can look down at your own hands
     virtual void setAccurateAiming(bool enabled);
 
-    virtual void setWeaponGroup(const std::string& group);
+    virtual void setWeaponGroup(const std::string& group, bool relativeDuration);
 
     virtual osg::Vec3f runAnimation(float timepassed);
 
@@ -155,7 +158,7 @@ public:
     virtual void updatePtr(const MWWorld::Ptr& updated);
 
     /// Get a list of body parts that may be used by an NPC of given race and gender.
-    /// @note This is a fixed size list, one list item for each ESM::PartReferenceType, may contain NULL body parts.
+    /// @note This is a fixed size list, one list item for each ESM::PartReferenceType, may contain nullptr body parts.
     static const std::vector<const ESM::BodyPart*>& getBodyParts(const std::string& raceId, bool female, bool firstperson, bool werewolf);
 };
 
